@@ -1,0 +1,65 @@
+package bootstrap
+
+import (
+	"os"
+	"time"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/compress"
+	"github.com/gofiber/fiber/v2/middleware/etag"
+	"github.com/gofiber/fiber/v2/middleware/helmet"
+	"github.com/gofiber/fiber/v2/middleware/monitor"
+	"github.com/shahbazkrispx/pkgcommon"
+
+	"github.com/gofiber/fiber/v2/middleware/recover"
+	"{{.ModulePath}}/internal/db"
+	"{{.ModulePath}}/internal/api"
+	"{{.ModulePath}}/internal/service"
+	"{{.ModulePath}}/pkg/logger"
+)
+
+func Start() error {
+
+	time.Local = time.UTC
+
+	if err := db.OpenConnection(); err != nil {
+		logger.Danger("Please check mysql server")
+		return err
+	}
+
+	svc := service.NewContainer(db.Conn)
+
+	// Initialize Fiber app
+	app := fiber.New(
+		fiber.Config{
+			AppName:       os.Getenv("APP_NAME"),
+			CaseSensitive: true,
+			ErrorHandler: func(c *fiber.Ctx, err error) error {
+				return c.Status(fiber.StatusInternalServerError).JSON(pkgcommon.ResponseBuilder(false, err.Error(), nil, err))
+			},
+		},
+	)
+
+	// Initialize default config
+	app.Use(helmet.New()).
+		Use(etag.New()).
+		Use(recover.New(recover.Config{
+			EnableStackTrace: true,
+			StackTraceHandler: func(c *fiber.Ctx, e any) {
+				c.Status(fiber.StatusInternalServerError).JSON(pkgcommon.ResponseBuilder(false, "Something went wrong.", nil, e))
+			},
+		})).
+		Use(compress.New(compress.Config{
+			Level: compress.LevelBestSpeed,
+		}))
+
+	app.Get("/dashboard", monitor.New(monitor.Config{
+		Title: os.Getenv("APP_NAME"),
+		// APIOnly:    true,
+		FontURL: "https://fonts.googleapis.com/css2?family=Roboto:wght@300&display=swap",
+	}))
+
+	api.Register(app, svc)
+
+	return app.Listen(":" + os.Getenv("PORT"))
+}

@@ -1,0 +1,50 @@
+# ────────────────
+# OS/system files
+# ────────────────
+.DS_Store
+
+# ────────────────
+# Go build artifacts
+# ────────────────
+*.exe
+*.exe~
+*.out
+*.test
+*.tmp
+*.zip
+
+# ────────────────
+# Go tool folders
+# ────────────────
+bin/
+dist/
+tmp/
+
+# ────────────────
+# Coverage & test reports
+# ────────────────
+coverage.out
+
+# ────────────────
+# Editor/IDE config
+# ────────────────
+.vscode/
+.idea/
+
+# ────────────────
+# Logs
+# ────────────────
+*.log
+
+# ────────────────
+# Env/config
+# ────────────────
+.env
+.env.*
+
+
+# Generator history
+.gen_history.json
+
+msdevbytes
+msdevbytes.pub

@@ -1,0 +1,38 @@
+package handler
+
+import (
+	"{{.Module}}/internal/service"
+	"github.com/gofiber/fiber/v2"
+)
+
+type {{.Receiver}}Handler struct {
+	svc *service.{{.Service}}Service
+}
+
+func New{{.Service}}Handler(svc *service.{{.Service}}Service) *{{.Receiver}}Handler {
+	return &{{.Receiver}}Handler{svc: svc}
+}
+
+func (h *{{.Receiver}}Handler) Register(router fiber.Router) {
+	router.Get("/", h.list)
+	router.Post("/", h.create)
+	router.Get("/:id", h.get)
+	router.Put("/:id", h.update)
+	router.Delete("/:id", h.delete)
+}
+
+func (h *{{.Receiver}}Handler) list(c *fiber.Ctx) error   {
+	return success(c, nil) //- todo))  Implement list logic
+}
+func (h *{{.Receiver}}Handler) create(c *fiber.Ctx) error { 
+	return c.SendStatus(fiber.StatusCreated) 
+}
+func (h *{{.Receiver}}Handler) get(c *fiber.Ctx) error    { 
+	return success(c, nil) //- todo))  Implement get logic
+}
+func (h *{{.Receiver}}Handler) update(c *fiber.Ctx) error { 
+	return success(c, nil) //- todo))  Implement update logic
+}
+func (h *{{.Receiver}}Handler) delete(c *fiber.Ctx) error { 
+	return success(c, nil) //- todo))  Implement delete logic
+}

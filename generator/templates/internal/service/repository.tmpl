@@ -1,0 +1,15 @@
+package repository
+
+import "gorm.io/gorm"
+
+type {{.Service}}Repository interface {
+	// Define repository methods here
+}
+
+type {{.Repository}}Repository struct {
+	db *gorm.DB
+}
+
+func New{{.Service}}Repository(db *gorm.DB) {{.Service}}Repository {
+	return &{{.Repository}}Repository{db}
+}

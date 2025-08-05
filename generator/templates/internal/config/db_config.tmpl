@@ -1,0 +1,42 @@
+package config
+
+import (
+	"os"
+	"time"
+)
+
+type Config struct {
+	DBHost       string
+	DBPort       string
+	DBUser       string
+	DBPassword   string
+	DBName       string
+	Port         string
+	MaxOpenConns int
+	MaxIdleConns int
+	ConnMaxIdle  time.Duration
+	ConnMaxLife  time.Duration
+}
+
+func DBConfig() *Config {
+	cfg := &Config{
+		DBHost:       os.Getenv("DB_HOST"),
+		DBPort:       os.Getenv("DB_PORT"),
+		DBUser:       os.Getenv("DB_USER"),
+		DBPassword:   os.Getenv("DB_PASSWORD"),
+		DBName:       os.Getenv("DB_NAME"),
+		Port:         os.Getenv("PORT"),
+		MaxOpenConns: 100,
+		MaxIdleConns: 10,
+		ConnMaxLife:  30 * time.Minute,
+		ConnMaxIdle:  10 * time.Minute,
+	}
+	if os.Getenv("APP_ENV") == "dev" {
+		cfg.ConnMaxLife = 0 // life
+		cfg.ConnMaxIdle = 0 // idle
+	} else if os.Getenv("APP_ENV") == "test" {
+		cfg.ConnMaxLife = 10 * time.Minute // life
+		cfg.ConnMaxIdle = 5 * time.Minute  // idle
+	}
+	return cfg
+}

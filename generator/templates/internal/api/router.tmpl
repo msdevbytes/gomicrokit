@@ -1,0 +1,23 @@
+package api
+
+import (
+	"os"
+	"time"
+
+	"{{.ModulePath}}/internal/handler"
+	"{{.ModulePath}}/internal/service"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/shahbazkrispx/pkgcommon"
+)
+
+func Register(app *fiber.App, svc *service.Container) {
+
+	app.Get("/", func(c *fiber.Ctx) error {
+		return c.JSON(pkgcommon.ResponseBuilder(true, "Welcome to Service", time.Now().Format(time.RFC3339), nil))
+	})
+
+	api := app.Group(os.Getenv("API_ROUTE_VERSION"))
+
+	handler.NewDefaultHandler().Register(api.Group("/"))
+}

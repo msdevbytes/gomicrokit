@@ -1,0 +1,64 @@
+package db
+
+import (
+	"fmt"
+
+	"{{.ModulePath}}/internal/config"
+	"{{.ModulePath}}/pkg/logger"
+
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
+)
+
+var Conn *gorm.DB
+
+func OpenConnection() error {
+	cfg := config.DBConfig()
+
+	dsn := fmt.Sprintf(
+		"%s:%s@tcp(%s:%s)/%s?parseTime=true&loc=UTC&time_zone='%%2B00:00'",
+		cfg.DBUser, cfg.DBPassword, cfg.DBHost, cfg.DBPort, cfg.DBName,
+	)
+
+	dbConn, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	if err != nil {
+		return err
+	}
+	Conn = dbConn
+
+	// 🔐 Enforce UTC at session level
+	sqlDB, err := dbConn.DB()
+	if err != nil {
+		return fmt.Errorf("error retrieving sql.DB: %w", err)
+	}
+
+	// ✅ Set Connection Pooling Parameters
+	sqlDB.SetMaxOpenConns(cfg.MaxOpenConns) // e.g. 100
+	sqlDB.SetMaxIdleConns(cfg.MaxIdleConns) // e.g. 10
+	sqlDB.SetConnMaxIdleTime(cfg.ConnMaxIdle)
+	sqlDB.SetConnMaxLifetime(cfg.ConnMaxLife)
+
+	stats := sqlDB.Stats()
+	logger.Info("DB Pool: Open=%d, InUse=%d, Idle=%d, WaitCount=%d",
+		stats.OpenConnections, stats.InUse, stats.Idle, stats.WaitCount)
+
+	logger.Info("Connected to the database")
+	// Migrate the database schema
+	autoMigrate()
+
+	return nil
+}
+
+func CloseConnect() error {
+	sqlDB, err := Conn.DB()
+	if err != nil {
+		return err
+	}
+
+	if err := sqlDB.Close(); err != nil {
+		return err
+	}
+	logger.Info("Database connection closed")
+
+	return nil
+}

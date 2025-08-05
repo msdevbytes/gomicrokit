@@ -1,0 +1,11 @@
+package service
+
+import "{{.Module}}/internal/repository"
+
+type {{.Receiver}}Service struct {
+	repo repository.{{.Service}}Repository
+}
+
+func New{{.Service}}Service(r repository.{{.Service}}Repository) *{{.Receiver}}Service {
+	return &{{.Receiver}}Service{repo: r}
+}

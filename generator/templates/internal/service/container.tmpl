@@ -1,0 +1,25 @@
+package service
+
+// Instructions:
+// Do not manually register services here unless absolutely necessary.
+// This code is designed to auto-register services dynamically.
+// Any manual changes might interfere with the auto-registration process.
+// Ensure that any new service follows the auto-registration conventions.
+
+import (
+	"gorm.io/gorm"
+)
+
+type Container struct {
+	// Add your service interfaces here
+	// Example: UserService UserServiceInterface
+	// Ensure that these services are registered automatically
+	// Do not manually register services here unless absolutely necessary
+	// This is to maintain the auto-registration functionality
+}
+
+func NewContainer(db *gorm.DB) *Container {
+	return &Container{
+		// register auto
+	}
+}
