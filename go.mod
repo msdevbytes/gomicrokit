@@ -1,6 +1,6 @@
 module github.com/msdevbytes/gomicrokit
 
-go 1.24.4
+go 1.25
 
 require (
 	github.com/charmbracelet/bubbles v0.18.0

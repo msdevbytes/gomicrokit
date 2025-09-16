@@ -9,6 +9,7 @@ import (
 	"text/template"
 
 	"github.com/iancoleman/strcase"
+
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
@@ -33,8 +34,8 @@ func GenerateService(opt ServiceOptions) error {
 	}
 
 	// Derive naming
-	service := cases.Title(language.Und).String(opt.Name)
-	receiver := cases.Title(language.Und).String(opt.Name)
+	service := convertToTitleCaseNoSpaces(opt.Name)
+	receiver := convertToTitleCaseNoSpaces(opt.Name)
 	repo := strings.ToLower(service[:1]) + service[1:]
 	snake := strcase.ToSnake(opt.Name)
 
