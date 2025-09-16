@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode"
 
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
@@ -100,6 +101,35 @@ func updateRoutes(serviceName string) {
 
 	must(os.WriteFile(routesFile, []byte(strings.Join(lines, "\n")), 0644))
 	fmt.Println("📍 Updated: internal/api/router.go")
+}
+
+func convertToTitleCaseNoSpaces(s string) string {
+	if s == "" {
+		return ""
+	}
+	// Remove all spaces from the string
+	s = strings.ReplaceAll(s, " ", "")
+
+	var result strings.Builder
+	result.Grow(len(s)) // Pre-allocate memory for efficiency
+
+	// Capitalize the first character of the entire string
+	result.WriteRune(unicode.ToUpper(rune(s[0])))
+
+	for i := 1; i < len(s); i++ {
+		r := rune(s[i])
+		prevR := rune(s[i-1])
+
+		// If the current character is an uppercase letter and the previous is lowercase,
+		// it indicates a new "word" in a camelCase/PascalCase string.
+		if unicode.IsUpper(r) && unicode.IsLower(prevR) {
+			result.WriteRune(r)
+		} else {
+			// Otherwise, add the character as is (lowercase for subsequent letters of a "word")
+			result.WriteRune(unicode.ToLower(r))
+		}
+	}
+	return result.String()
 }
 
 func updateContainer(serviceName string) {
