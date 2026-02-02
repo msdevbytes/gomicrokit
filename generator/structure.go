@@ -86,8 +86,20 @@ func InstallDeps(projectPath string) error {
 
 // CreateProjectStructure creates folders and base files for the new project
 func CreateProjectStructure(projectName string, withDocker bool) error {
+	if projectName == "" {
+		return fmt.Errorf("project name cannot be empty")
+	}
+
+	// Check if directory already exists
+	if info, err := os.Stat(projectName); err == nil {
+		if info.IsDir() {
+			return fmt.Errorf("directory '%s' already exists. Choose a different name or delete the existing directory", projectName)
+		}
+		return fmt.Errorf("a file named '%s' already exists", projectName)
+	}
+
 	if err := os.Mkdir(projectName, 0755); err != nil {
-		return err
+		return fmt.Errorf("cannot create project directory: %w", err)
 	}
 
 	// create folders

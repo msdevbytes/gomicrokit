@@ -1,163 +1,235 @@
-# 🧰 GoMicroKit — Scaffold Go Microservices Fast with Style 🚀
+# GMK (GoMicroKit)
 
-**GoMicroKit** is an interactive CLI tool for generating scalable, idiomatic Go microservice boilerplates — with support for REST frameworks, databases, GORM, Docker, and more. Inspired by Laravel's
-`artisan`, but for Go developers.
+A CLI tool for scaffolding Go microservices with clean architecture patterns.
 
-✨ Built with [Bubble Tea](https://github.com/charmbracelet/bubbletea), [Cobra](https://github.com/spf13/cobra), and Go best practices.
+## Features
 
----
+- Interactive project setup with Bubble Tea TUI
+- Repository pattern with GORM
+- Service layer architecture
+- REST API handlers (Fiber)
+- Docker support
+- Auto-generated tests
+- Service generation and removal
 
-## 📦 Features
-
-- 🏗️ Generate a full microservice directory with:
-  - Framework: `fiber` (more coming soon)
-  - DB setup `mysql` (more coming soon)
-  - GORM support toggle
-  - Docker support
-- ⚙️ Uses Repository Pattern, Service Layer, DTOs
-- 🧪 Auto-generates test boilerplates
-- 🐳 Dockerfile support
-- 🌈 Interactive UI with Bubble Tea (fancy CLI)
-- 🧽 Remove previously generated services
-- 🕹️ Flags & prompts: hybrid control for automation and UX
-
----
-
-## 🔧 Installation
+## Installation
 
 ```bash
 go install github.com/msdevbytes/gomicrokit@latest
 ```
 
-> Or clone and run locally:
+Or build from source:
 
 ```bash
 git clone https://github.com/msdevbytes/gomicrokit.git
 cd gomicrokit
-go run main.go
+go build -o gmk .
 ```
 
----
+## Quick Start
 
-## 🚀 Usage
+### Create a New Project
 
-### 🎬 Start the CLI
+Interactive mode:
+```bash
+gmk new
+```
+
+Non-interactive:
+```bash
+gmk new myproject --module github.com/user/myproject --db mysql --docker
+```
+
+Preview without creating files:
+```bash
+gmk new myproject --dry-run
+```
+
+### Generate a Service
 
 ```bash
-gomicrokit new
+gmk make:service
 ```
 
-You'll be guided through:
+Or non-interactive:
+```bash
+gmk make:service --name user --force
+```
 
-- Project name
-- Framework selection (currently supports `fiber`)
-- Database selection
-- Use GORM? (y/n)
-- Include Dockerfile? (y/n)
+Preview generated code:
+```bash
+gmk make:service --name user --dry-run
+```
 
-✨ A spinner will run while your project is generated, packages are installed, and success is displayed in style.
-
----
-
-## 🧪 Example
+### Remove a Service
 
 ```bash
-gomicrokit new
+gmk remove:service
 ```
 
-```
-🧱 Project Name:      mysvc
-🛠️  Framework:         fiber
-🗄️  Database:          postgres
-📦 Use GORM:          y
-🐳 Docker Support:    y
+Or with force (bypass time check):
+```bash
+gmk remove:service --name user --force
 ```
 
-➡️ Output:
+### Check Version
 
 ```bash
-📁 Scaffolding...
-✅ Created: internal/service/mysvc_service.go
-✅ Created: internal/repository/mysvc_repository.go
-✅ Created: internal/model/mysvc_model.go
-✅ Created: internal/handler/mysvc_handler.go
-✅ Updated: internal/service/container.go
-✅ Updated: internal/routes/index.go
-📦 Installing packages...
-🔥 Done! Project 'mysvc' generated successfully.
+gmk version
 ```
 
----
+## Commands
 
-## 📁 Project Structure
+| Command | Description |
+|---------|-------------|
+| `new [name]` | Create a new microservice project |
+| `make:service` | Generate a new service (model, repo, handler, etc.) |
+| `remove:service` | Remove a previously generated service |
+| `version` | Print version information |
 
-```bash
-mysvc/
+## Flags
+
+### `new` command
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--module` | | Go module path (e.g., github.com/user/project) |
+| `--db` | mysql | Database type (mysql, postgres, sqlite) |
+| `--docker` | true | Include Dockerfile |
+| `--dry-run` | false | Preview what would be created |
+
+### `make:service` command
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--name` | | Service name (e.g., user, product) |
+| `--force` | false | Overwrite existing files |
+| `--dry-run` | false | Preview generated code |
+
+## Generated Project Structure
+
+```
+myproject/
 ├── cmd/
-│   └── main.go
+│   └── main.go              # Application entry point
 ├── internal/
+│   ├── api/
+│   │   └── router.go        # Route definitions
+│   ├── bootstrap/
+│   │   └── app.go           # App initialization
+│   ├── config/
+│   │   ├── db_config.go     # Database configuration
+│   │   └── pagination_config.go
+│   ├── db/
+│   │   ├── db.go            # Database connection
+│   │   └── migrations.go    # Auto-migrations
 │   ├── dto/
+│   │   └── pagination.go    # Shared DTOs
 │   ├── handler/
+│   │   ├── default.go       # Default handlers
+│   │   └── response.go      # Response helpers
 │   ├── model/
-│   ├── repository/
-│   ├── routes/
+│   │   └── base.go          # Base model with UUID
+│   ├── repository/          # Data access layer
 │   └── service/
+│       └── container.go     # Dependency injection
+├── pkg/
+│   └── logger/
+│       └── logger.go        # Logging utilities
 ├── test/
+│   ├── mocks/
 │   └── unit/
-│       └── dto/
+├── .env                     # Environment variables
+├── .gitignore
+├── Dockerfile
 ├── go.mod
-├── Dockerfile (optional)
-└── .gen_history.json
+└── .gen_history.json        # Service generation history
 ```
 
----
+## Generated Service Files
 
-## ⚡ Commands
+When you run `gmk make:service --name user`, these files are created:
 
-### 🏗️ Generate a Service (non-interactive)
+```
+internal/
+├── model/user_model.go          # GORM model
+├── repository/user_repository.go # Repository interface + implementation
+├── service/user_service.go       # Business logic layer
+├── handler/user_handler.go       # REST handlers
+├── dto/user_dto.go              # Request/Response DTOs
+test/
+└── unit/dto/user_input_test.go  # DTO tests
+```
+
+### Generated Code Examples
+
+**Repository** - Full CRUD with pagination:
+```go
+type UserRepository interface {
+    FindAll(page, limit int) ([]model.User, int64, error)
+    FindByID(id string) (*model.User, error)
+    Create(entity *model.User) error
+    Update(entity *model.User) error
+    Delete(id string) error
+}
+```
+
+**Handler** - REST endpoints with validation:
+```go
+func (h *UserHandler) Register(router fiber.Router) {
+    router.Get("/", h.list)      // GET /users?page=1&limit=10
+    router.Post("/", h.create)   // POST /users
+    router.Get("/:id", h.get)    // GET /users/:id
+    router.Put("/:id", h.update) // PUT /users/:id
+    router.Delete("/:id", h.delete) // DELETE /users/:id
+}
+```
+
+## Environment Variables
+
+```env
+APP_NAME="My Service"
+APP_ENV=dev
+PORT=8000
+API_ROUTE_VERSION=/api/v1
+FORCE_MIGRATE=no
+DB_USER=root
+DB_PASSWORD=
+DB_HOST=127.0.0.1
+DB_NAME=mydb
+DB_PORT=3306
+```
+
+## Building with Version Info
 
 ```bash
-gomicrokit make:service --name=event --force
+go build -ldflags "\
+  -X 'github.com/msdevbytes/gomicrokit/cmd.Version=1.0.0' \
+  -X 'github.com/msdevbytes/gomicrokit/cmd.GitCommit=$(git rev-parse HEAD)' \
+  -X 'github.com/msdevbytes/gomicrokit/cmd.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)'" \
+  -o gmk .
 ```
 
-### 🧼 Remove a Service (interactive)
+## Development
 
 ```bash
-gomicrokit remove:service
+# Run tests
+go test ./... -v
+
+# Run with coverage
+go test ./... -cover
+
+# Build
+go build -o gmk .
+
+# Run locally
+go run . new myproject --dry-run
 ```
 
----
+## License
 
-## ✨ Templates
+MIT
 
-Templates are stored in:
+## Credits
 
-```
-templates/service/
-├── model.tmpl
-├── repository.tmpl
-├── service.tmpl
-├── handler.tmpl
-├── dto.tmpl
-├── dto_test.tmpl
-```
-
----
-
-## 📖 Dev Guide
-
-```bash
-go run main.go
-```
-
----
-
-## 📄 License
-
-MIT — use it freely.
-
----
-
-## 💬 Credits
-
-Built with ❤️ by [msdevbytes](https://github.com/msdevbytes).
+Built by [msdevbytes](https://github.com/msdevbytes)

@@ -30,6 +30,7 @@ coverage.out
 # ────────────────
 .vscode/
 .idea/
+.claude/
 
 # ────────────────
 # Logs
@@ -48,3 +49,8 @@ coverage.out
 
 msdevbytes
 msdevbytes.pub
+*.md
+!README.md
+!CHANGELOG.md
+
+test_output/**

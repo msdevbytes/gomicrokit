@@ -1,5 +1,12 @@
 package model
 
-type {{.Receiver}} struct {
+// {{.Service}} represents a {{.Service}} entity in the database
+type {{.Service}} struct {
 	UUIDBaseModel
+	Name string `gorm:"type:varchar(255);not null" json:"name"`
+}
+
+// TableName returns the table name for the {{.Service}} model
+func ({{.Service}}) TableName() string {
+	return "{{.Repository}}s"
 }

@@ -7,8 +7,16 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "gomicrokit",
-	Short: "Scaffold Go microservices with repo pattern",
+	Use:   "gmk",
+	Short: "Scaffold Go microservices with clean architecture",
+	Long: `GMK (GoMicroKit) is an interactive CLI tool for generating scalable Go microservice
+boilerplates with Repository pattern, Service layer, and REST handlers.
+
+Examples:
+  gmk new                    # Interactive project creation
+  gmk new myapp --dry-run    # Preview what would be created
+  gmk make:service           # Interactive service generation
+  gmk version                # Show version info`,
 }
 
 func Execute() {

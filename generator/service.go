@@ -9,9 +9,6 @@ import (
 	"text/template"
 
 	"github.com/iancoleman/strcase"
-
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 )
 
 //go:embed templates/internal/service/*.tmpl
@@ -43,7 +40,7 @@ func GenerateService(opt ServiceOptions) error {
 		"Service":    service,
 		"Receiver":   receiver,
 		"Repository": repo,
-		"Module":     cases.Lower(language.Und).String(opt.ModulePath),
+		"Module":     opt.ModulePath,
 	}
 
 	files := map[string]string{
@@ -56,6 +53,7 @@ func GenerateService(opt ServiceOptions) error {
 	}
 
 	generated := []string{}
+	skipped := []string{}
 
 	for path, tmplName := range files {
 		content, err := renderTemplate(tmplName, data)
@@ -71,36 +69,42 @@ func GenerateService(opt ServiceOptions) error {
 		}
 
 		if _, err := os.Stat(path); err == nil && !opt.Force {
+			skipped = append(skipped, path)
 			continue
 		}
 
 		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-			return err
+			return fmt.Errorf("cannot create directory for %s: %w", path, err)
 		}
 
 		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-			return err
+			return fmt.Errorf("cannot write file %s: %w", path, err)
 		}
 
 		generated = append(generated, path)
 	}
 
+	// Notify user about skipped files
+	if len(skipped) > 0 && !opt.DryRun {
+		fmt.Printf("⏭️ Skipped %d existing file(s) (use --force to overwrite):\n", len(skipped))
+		for _, f := range skipped {
+			fmt.Printf("   - %s\n", f)
+		}
+	}
+
 	if !opt.DryRun {
 		fileName := strcase.ToSnake(opt.Name)
-		writeHistory(opt.Name, generated)
-		updateContainer(service)
-		updateRoutes(service)
-
-		generatedFiles := []string{
-			fmt.Sprintf("internal/model/%s_model.go", fileName),
-			fmt.Sprintf("internal/repository/%s_repository.go", fileName),
-			fmt.Sprintf("internal/service/%s_service.go", fileName),
-			fmt.Sprintf("internal/handler/%s_handler.go", fileName),
-			fmt.Sprintf("internal/dto/%s_dto.go", fileName),
-			fmt.Sprintf("test/unit/dto/%s_input_test.go", fileName),
+		if err := updateContainer(service); err != nil {
+			return fmt.Errorf("failed to update container: %w", err)
 		}
-		writeHistory(opt.Name, generatedFiles)
-		fmt.Println("📝 History updated in .gen_history.json")
+		if err := updateRoutes(service); err != nil {
+			return fmt.Errorf("failed to update routes: %w", err)
+		}
+		if err := writeHistory(opt.Name, generated); err != nil {
+			fmt.Printf("⚠️ Warning: failed to write history: %v\n", err)
+		} else {
+			fmt.Println("📝 History updated in .gen_history.json")
+		}
 		fmt.Printf("✅ Service '%s' generated and registered in container.\n", fileName)
 	}
 

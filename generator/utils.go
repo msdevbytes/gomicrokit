@@ -8,9 +8,6 @@ import (
 	"strings"
 	"time"
 	"unicode"
-
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 )
 
 func GetGoModule() string {
@@ -20,33 +17,36 @@ func GetGoModule() string {
 	}
 	for line := range strings.SplitSeq(string(data), "\n") {
 		if after, ok := strings.CutPrefix(line, "module "); ok {
-			return cases.Lower(language.Und).String(strings.TrimSpace(after))
+			return strings.TrimSpace(after)
 		}
 	}
 	return "unknown-module"
 }
 
+// isValidGoIdent checks if s is a valid Go identifier.
+// Go identifiers must start with a letter or underscore and contain only
+// letters, digits, and underscores.
 func isValidGoIdent(s string) bool {
-	if s == "" || !isLetter(rune(s[0])) {
+	if s == "" {
 		return false
 	}
-	for _, r := range s {
-		if !isLetter(r) && !isDigit(r) {
-			return false
+	for i, r := range s {
+		if i == 0 {
+			// First character must be a letter or underscore
+			if !unicode.IsLetter(r) && r != '_' {
+				return false
+			}
+		} else {
+			// Subsequent characters can be letters, digits, or underscores
+			if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_' {
+				return false
+			}
 		}
 	}
 	return true
 }
 
-func isLetter(r rune) bool {
-	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
-}
-
-func isDigit(r rune) bool {
-	return r >= '0' && r <= '9'
-}
-
-func writeHistory(name string, files []string) {
+func writeHistory(name string, files []string) error {
 	const historyFile = ".gen_history.json"
 
 	history := map[string]struct {
@@ -54,6 +54,7 @@ func writeHistory(name string, files []string) {
 		Files     []string `json:"files"`
 	}{}
 
+	// Read existing history (ignore error - file may not exist yet)
 	data, _ := os.ReadFile(historyFile)
 	_ = json.Unmarshal(data, &history)
 
@@ -65,27 +66,36 @@ func writeHistory(name string, files []string) {
 		Files:     files,
 	}
 
-	historyData, _ := json.MarshalIndent(history, "", "  ")
-	_ = os.WriteFile(historyFile, historyData, 0644)
+	historyData, err := json.MarshalIndent(history, "", "  ")
+	if err != nil {
+		return fmt.Errorf("cannot marshal history: %w", err)
+	}
+	if err := os.WriteFile(historyFile, historyData, 0644); err != nil {
+		return fmt.Errorf("cannot write history file: %w", err)
+	}
+	return nil
 }
 
-func updateRoutes(serviceName string) {
-	// module := getGoModule()
+func updateRoutes(serviceName string) error {
 	routesFile := "internal/api/router.go"
 
 	handlerLine := fmt.Sprintf("\thandler.New%sHandler(svc.%s).Register(api.Group(\"/%ss\"))", serviceName, serviceName, strings.ToLower(serviceName))
 
 	// Check if already registered
 	data, err := os.ReadFile(routesFile)
-	must(err)
+	if err != nil {
+		return fmt.Errorf("cannot read routes file: %w", err)
+	}
 	if strings.Contains(string(data), handlerLine) {
-		fmt.Println("📍 Route already exists in index.go")
-		return
+		fmt.Println("📍 Route already exists in router.go")
+		return nil
 	}
 
 	lines := []string{}
 	file, err := os.Open(routesFile)
-	must(err)
+	if err != nil {
+		return fmt.Errorf("cannot open routes file: %w", err)
+	}
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
@@ -97,10 +107,15 @@ func updateRoutes(serviceName string) {
 			lines = append(lines, handlerLine)
 		}
 	}
-	must(scanner.Err())
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("error scanning routes file: %w", err)
+	}
 
-	must(os.WriteFile(routesFile, []byte(strings.Join(lines, "\n")), 0644))
+	if err := os.WriteFile(routesFile, []byte(strings.Join(lines, "\n")), 0644); err != nil {
+		return fmt.Errorf("cannot write routes file: %w", err)
+	}
 	fmt.Println("📍 Updated: internal/api/router.go")
+	return nil
 }
 
 func convertToTitleCaseNoSpaces(s string) string {
@@ -132,14 +147,13 @@ func convertToTitleCaseNoSpaces(s string) string {
 	return result.String()
 }
 
-func updateContainer(serviceName string) {
+func updateContainer(serviceName string) error {
 	path := "internal/service/container.go"
 	lines := []string{}
 
 	file, err := os.Open(path)
 	if err != nil {
-		fmt.Println("❌ container.go not found")
-		return
+		return fmt.Errorf("container.go not found: %w", err)
 	}
 	defer file.Close()
 
@@ -200,8 +214,11 @@ func updateContainer(serviceName string) {
 		lines = append(lines, line)
 	}
 
-	if !alreadyImportedRepository && !insertedImport {
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("error scanning container file: %w", err)
+	}
 
+	if !alreadyImportedRepository && !insertedImport {
 		// Add import outside block if block not found
 		for i, l := range lines {
 			if strings.HasPrefix(strings.TrimSpace(l), "import") {
@@ -212,6 +229,9 @@ func updateContainer(serviceName string) {
 	}
 
 	output := strings.Join(lines, "\n")
-	must(os.WriteFile(path, []byte(output), 0644))
+	if err := os.WriteFile(path, []byte(output), 0644); err != nil {
+		return fmt.Errorf("cannot write container file: %w", err)
+	}
 	fmt.Println("📦 Updated: internal/service/container.go")
+	return nil
 }

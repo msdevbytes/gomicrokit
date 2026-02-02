@@ -16,6 +16,7 @@ var (
 	db     string
 	module string
 	docker bool
+	dryRun bool
 )
 
 func getGoVersion() string {
@@ -26,6 +27,16 @@ func getGoVersion() string {
 var initCmd = &cobra.Command{
 	Use:   "new [project-name]",
 	Short: "Initialize a new Go microservice project",
+	Long: `Create a new Go microservice project with clean architecture.
+
+Includes: Fiber REST framework, GORM ORM, MySQL support, Docker setup,
+Repository pattern, Service layer, and organized project structure.
+
+Examples:
+  gmk new                                    # Interactive mode
+  gmk new myapp                              # Create 'myapp' project
+  gmk new myapp --module github.com/me/myapp # With custom module
+  gmk new myapp --dry-run                    # Preview only`,
 	Run: func(cmd *cobra.Command, args []string) {
 		var input map[string]string
 
@@ -49,11 +60,46 @@ var initCmd = &cobra.Command{
 		if modulePath == "" {
 			modulePath = cases.Lower(language.Und).String(projectName)
 		}
-		if projectName != "" {
-			fmt.Printf("Scaffolding project: %s\n", projectName)
+
+		if projectName == "" {
+			fmt.Println("❌ Project name is required")
+			return
 		}
 
-		_ = generator.CreateProjectStructure(projectName, input["docker"] == "y")
+		// Dry run mode - show what would be created
+		if dryRun {
+			fmt.Println("🔍 Dry run mode - showing what would be created:")
+			fmt.Printf("\n📁 Project: %s\n", projectName)
+			fmt.Printf("📦 Module:  %s\n", modulePath)
+			fmt.Printf("🐳 Docker:  %v\n", input["docker"] == "y")
+			fmt.Printf("🗄️  DB:      %s\n", input["db"])
+			fmt.Println("\n📂 Directories that would be created:")
+			dirs := []string{
+				"cmd", "internal/bootstrap", "internal/api", "internal/config",
+				"internal/db", "internal/dto", "internal/handler", "internal/model",
+				"internal/repository", "internal/service", "pkg/logger", "test/unit",
+			}
+			for _, d := range dirs {
+				fmt.Printf("   - %s/%s\n", projectName, d)
+			}
+			fmt.Println("\n📄 Files that would be created:")
+			files := []string{
+				"cmd/main.go", "go.mod", ".env", ".gitignore",
+				"internal/bootstrap/app.go", "internal/api/router.go",
+				"internal/service/container.go", "pkg/logger/logger.go",
+			}
+			for _, f := range files {
+				fmt.Printf("   - %s/%s\n", projectName, f)
+			}
+			return
+		}
+
+		fmt.Printf("🚀 Scaffolding project: %s\n", projectName)
+
+		if err := generator.CreateProjectStructure(projectName, input["docker"] == "y"); err != nil {
+			fmt.Printf("❌ Error creating project structure: %v\n", err)
+			return
+		}
 
 		err := generator.RenderTemplates(projectName, generator.TemplateData{
 			ProjectName: projectName,
@@ -61,25 +107,32 @@ var initCmd = &cobra.Command{
 			GoVersion:   getGoVersion(),
 		})
 		if err != nil {
-			fmt.Println("❌ Error generating templates:", err)
+			fmt.Printf("❌ Error generating templates: %v\n", err)
 			return
 		}
 
 		projectPath, err := generator.ScaffoldProject(input)
 		if err != nil {
-			fmt.Println("❌ Error during generation:", err)
+			fmt.Printf("❌ Error during generation: %v\n", err)
 			return
 		}
 
+		fmt.Println("📦 Installing dependencies...")
 		if err := generator.InstallDeps(projectPath); err != nil {
-			fmt.Println("❌ Error during dependency installation:", err)
+			fmt.Printf("❌ Error during dependency installation: %v\n", err)
 			return
 		}
+
+		fmt.Printf("\n✅ Project '%s' created successfully!\n", projectName)
+		fmt.Printf("\n📋 Next steps:\n")
+		fmt.Printf("   cd %s\n", projectName)
+		fmt.Printf("   go run cmd/main.go\n")
 	},
 }
 
 func init() {
 	initCmd.Flags().StringVar(&db, "db", "mysql", "Database type (postgres, mysql, sqlite)")
 	initCmd.Flags().BoolVar(&docker, "docker", true, "Include Dockerfile and Air config")
-	initCmd.Flags().StringVar(&module, "module", generator.GetGoModule(), "Go module path (e.g. github.com/user/project)")
+	initCmd.Flags().StringVar(&module, "module", "", "Go module path (e.g. github.com/user/project)")
+	initCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview what would be created without making changes")
 }

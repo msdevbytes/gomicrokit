@@ -1,11 +1,34 @@
 package service
 
-import "{{.Module}}/internal/repository"
+import (
+	"{{.Module}}/internal/model"
+	"{{.Module}}/internal/repository"
+)
 
-type {{.Receiver}}Service struct {
+type {{.Service}}Service struct {
 	repo repository.{{.Service}}Repository
 }
 
-func New{{.Service}}Service(r repository.{{.Service}}Repository) *{{.Receiver}}Service {
-	return &{{.Receiver}}Service{repo: r}
+func New{{.Service}}Service(r repository.{{.Service}}Repository) *{{.Service}}Service {
+	return &{{.Service}}Service{repo: r}
+}
+
+func (s *{{.Service}}Service) List(page, limit int) ([]model.{{.Service}}, int64, error) {
+	return s.repo.FindAll(page, limit)
+}
+
+func (s *{{.Service}}Service) GetByID(id string) (*model.{{.Service}}, error) {
+	return s.repo.FindByID(id)
+}
+
+func (s *{{.Service}}Service) Create(entity *model.{{.Service}}) error {
+	return s.repo.Create(entity)
+}
+
+func (s *{{.Service}}Service) Update(entity *model.{{.Service}}) error {
+	return s.repo.Update(entity)
+}
+
+func (s *{{.Service}}Service) Delete(id string) error {
+	return s.repo.Delete(id)
 }

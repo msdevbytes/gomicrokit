@@ -1,3 +1,19 @@
 package dto
 
-//- todo))  Define DTOs for {{.Service}} operations
+// Create{{.Service}}Input represents the input for creating a {{.Service}}
+type Create{{.Service}}Input struct {
+	Name string `json:"name" validate:"required"`
+}
+
+// Update{{.Service}}Input represents the input for updating a {{.Service}}
+type Update{{.Service}}Input struct {
+	Name string `json:"name,omitempty"`
+}
+
+// {{.Service}}Response represents the response for a {{.Service}}
+type {{.Service}}Response struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}

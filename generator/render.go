@@ -46,22 +46,28 @@ func RenderTemplates(projectPath string, data TemplateData) error {
 	}
 	sort.Strings(outFiles)
 
-	for out, tmpl := range files {
-		t, err := template.ParseFS(tmplFS, "templates/"+tmpl)
-		if err != nil {
+	for _, out := range outFiles {
+		tmpl := files[out]
+		if err := renderTemplateToFile(projectPath, out, tmpl, data); err != nil {
 			return err
 		}
-		f, err := os.Create(filepath.Join(projectPath, out))
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-
-		if err := t.Execute(f, data); err != nil {
-			return err
-		}
-
 	}
 
 	return nil
+}
+
+// renderTemplateToFile renders a single template to a file, ensuring proper cleanup
+func renderTemplateToFile(projectPath, out, tmpl string, data TemplateData) error {
+	t, err := template.ParseFS(tmplFS, "templates/"+tmpl)
+	if err != nil {
+		return err
+	}
+
+	f, err := os.Create(filepath.Join(projectPath, out))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	return t.Execute(f, data)
 }

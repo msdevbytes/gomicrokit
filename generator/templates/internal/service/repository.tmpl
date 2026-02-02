@@ -1,9 +1,17 @@
 package repository
 
-import "gorm.io/gorm"
+import (
+	"{{.Module}}/internal/model"
+
+	"gorm.io/gorm"
+)
 
 type {{.Service}}Repository interface {
-	// Define repository methods here
+	FindAll(page, limit int) ([]model.{{.Service}}, int64, error)
+	FindByID(id string) (*model.{{.Service}}, error)
+	Create(entity *model.{{.Service}}) error
+	Update(entity *model.{{.Service}}) error
+	Delete(id string) error
 }
 
 type {{.Repository}}Repository struct {
@@ -11,5 +19,39 @@ type {{.Repository}}Repository struct {
 }
 
 func New{{.Service}}Repository(db *gorm.DB) {{.Service}}Repository {
-	return &{{.Repository}}Repository{db}
+	return &{{.Repository}}Repository{db: db}
+}
+
+func (r *{{.Repository}}Repository) FindAll(page, limit int) ([]model.{{.Service}}, int64, error) {
+	var items []model.{{.Service}}
+	var total int64
+
+	r.db.Model(&model.{{.Service}}{}).Count(&total)
+
+	offset := (page - 1) * limit
+	if err := r.db.Offset(offset).Limit(limit).Find(&items).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return items, total, nil
+}
+
+func (r *{{.Repository}}Repository) FindByID(id string) (*model.{{.Service}}, error) {
+	var item model.{{.Service}}
+	if err := r.db.Where("id = ?", id).First(&item).Error; err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (r *{{.Repository}}Repository) Create(entity *model.{{.Service}}) error {
+	return r.db.Create(entity).Error
+}
+
+func (r *{{.Repository}}Repository) Update(entity *model.{{.Service}}) error {
+	return r.db.Save(entity).Error
+}
+
+func (r *{{.Repository}}Repository) Delete(id string) error {
+	return r.db.Where("id = ?", id).Delete(&model.{{.Service}}{}).Error
 }

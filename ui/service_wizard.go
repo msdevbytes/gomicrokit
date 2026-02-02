@@ -114,7 +114,7 @@ func RunServiceWizard() ServiceInput {
 
 	return ServiceInput{
 		Name:       strings.TrimSpace(m.nameInput.Value()),
-		ModulePath: strings.ToLower(generator.GetGoModule()),
+		ModulePath: generator.GetGoModule(),
 		Force:      m.force,
 		DryRun:     m.dryRun,
 	}

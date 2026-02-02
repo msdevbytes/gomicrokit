@@ -9,29 +9,21 @@ import (
 )
 
 func RemoveService(name string, force bool) error {
-	flagName := name
-	flagForce := force
-	if flagName == "" {
-		return fmt.Errorf("❌ Usage: go run tools/remove_service.go -name <name>")
-	}
-	if flagName == "" {
-		return fmt.Errorf("❌ Please provide a service name with --name")
+	if name == "" {
+		return fmt.Errorf("please provide a service name")
 	}
 
-	name = strings.ToLower(flagName)
+	name = strings.ToLower(name)
 	service := strings.ToUpper(string(name[0])) + name[1:]
 
 	files, createdAt, err := readHistory(name)
 	if err != nil {
-		fmt.Println("⛔", err)
-		os.Exit(1)
+		return fmt.Errorf("cannot read history: %w", err)
 	}
 
-	// Enforce freshness (1 minutes max)
-	if time.Since(createdAt) > 1*time.Minute && !flagForce {
-		fmt.Println("⛔Force", !flagForce)
-		fmt.Printf("⛔ '%s' was created more than 5 minutes ago (%s). Use --force to override.\n", name, createdAt.Format(time.RFC822))
-		os.Exit(1)
+	// Enforce freshness (1 minute max)
+	if time.Since(createdAt) > 1*time.Minute && !force {
+		return fmt.Errorf("'%s' was created more than 1 minute ago (%s). Use --force to override", name, createdAt.Format(time.RFC822))
 	}
 
 	deleteFiles(files)
@@ -42,35 +34,20 @@ func RemoveService(name string, force bool) error {
 		fmt.Sprintf("New%sService", service),
 	})
 
-	fmt.Println("🔥 Removed:", fmt.Sprintf("%s/internal/repository", getGoModule()))
-	cleanUnusedImport("internal/service/container.go", fmt.Sprintf("%s/internal/repository", getGoModule()))
+	fmt.Println("🔥 Removed:", fmt.Sprintf("%s/internal/repository", GetGoModule()))
+	cleanUnusedImport("internal/service/container.go", fmt.Sprintf("%s/internal/repository", GetGoModule()))
 
 	cleanFromFile("internal/api/router.go", []string{
 		fmt.Sprintf("New%sHandler(svc.%s).Register(api.Group(\"/%ss\"))", service, service, name),
 	})
 
-	removeFromHistory(name)
+	if err := removeFromHistory(name); err != nil {
+		fmt.Printf("⚠️ Warning: failed to update history: %v\n", err)
+	}
+	fmt.Printf("✅ Service '%s' removed successfully.\n", name)
 	return nil
 }
 
-func getGoModule() string {
-	data, err := os.ReadFile("go.mod")
-	must(err)
-
-	for _, line := range strings.Split(string(data), "\n") {
-		if strings.HasPrefix(line, "module ") {
-			return strings.TrimSpace(strings.TrimPrefix(line, "module "))
-		}
-	}
-	return "your-module-name"
-}
-
-func must(err error) {
-	if err != nil {
-		fmt.Println("❌", err)
-		os.Exit(1)
-	}
-}
 
 func deleteFiles(paths []string) {
 	for _, p := range paths {
@@ -207,17 +184,28 @@ func readHistory(name string) ([]string, time.Time, error) {
 	return entry.Files, t, nil
 }
 
-func removeFromHistory(name string) {
+func removeFromHistory(name string) error {
 	const historyFile = ".gen_history.json"
 	history := map[string]interface{}{}
 
-	data, _ := os.ReadFile(historyFile)
-	json.Unmarshal(data, &history)
+	data, err := os.ReadFile(historyFile)
+	if err != nil {
+		return fmt.Errorf("cannot read history file: %w", err)
+	}
+	if err := json.Unmarshal(data, &history); err != nil {
+		return fmt.Errorf("cannot parse history file: %w", err)
+	}
 
 	delete(history, strings.ToLower(name))
 
-	newData, _ := json.MarshalIndent(history, "", "  ")
-	_ = os.WriteFile(historyFile, newData, 0644)
+	newData, err := json.MarshalIndent(history, "", "  ")
+	if err != nil {
+		return fmt.Errorf("cannot marshal history: %w", err)
+	}
+	if err := os.WriteFile(historyFile, newData, 0644); err != nil {
+		return fmt.Errorf("cannot write history file: %w", err)
+	}
+	return nil
 }
 
 func removeWhitespace(s string) string {

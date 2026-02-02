@@ -1,7 +1,48 @@
 package dto_test
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
 
-func Test{{.Service}}DTO(t *testing.T) {
-	t.Log(" todo))  write dto test")
+	"{{.Module}}/internal/dto"
+)
+
+func TestCreate{{.Service}}Input_JSON(t *testing.T) {
+	input := dto.Create{{.Service}}Input{
+		Name: "Test {{.Service}}",
+	}
+
+	data, err := json.Marshal(input)
+	if err != nil {
+		t.Fatalf("failed to marshal Create{{.Service}}Input: %v", err)
+	}
+
+	var decoded dto.Create{{.Service}}Input
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("failed to unmarshal Create{{.Service}}Input: %v", err)
+	}
+
+	if decoded.Name != input.Name {
+		t.Errorf("expected Name=%q, got %q", input.Name, decoded.Name)
+	}
+}
+
+func TestUpdate{{.Service}}Input_JSON(t *testing.T) {
+	input := dto.Update{{.Service}}Input{
+		Name: "Updated {{.Service}}",
+	}
+
+	data, err := json.Marshal(input)
+	if err != nil {
+		t.Fatalf("failed to marshal Update{{.Service}}Input: %v", err)
+	}
+
+	var decoded dto.Update{{.Service}}Input
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("failed to unmarshal Update{{.Service}}Input: %v", err)
+	}
+
+	if decoded.Name != input.Name {
+		t.Errorf("expected Name=%q, got %q", input.Name, decoded.Name)
+	}
 }
