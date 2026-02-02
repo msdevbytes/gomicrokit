@@ -4,6 +4,8 @@ All notable changes to GMK (GoMicroKit) will be documented in this file.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-02-02
+
 ### Added
 - Short CLI command name `gmk` (previously `gomicrokit`) for easier typing
 - `version` command to display version, git commit, build date, and Go version
