@@ -1,5 +1,17 @@
 # Troubleshooting
 
+## `gmk update --check` says Latest is older than Current
+
+`proxy.golang.org` can lag a new git tag by several minutes. v1.4.2 compares semver and also reads GitHub Releases, so it will not tell you to install an older tag.
+
+Until you have v1.4.2:
+
+```bash
+go install github.com/msdevbytes/gomicrokit/cmd/gmk@v1.4.2
+```
+
+Do **not** run `gmk update` while `--check` shows an older Latest than Current; that would have downgraded on v1.4.1.
+
 ## `unknown command "update"` (or missing `run` / `key:generate`)
 
 `go install github.com/msdevbytes/gomicrokit@latest` installs a binary named **`gomicrokit`**, not `gmk`. An older `gmk` (v1.3.0) can stay first on PATH.
@@ -8,7 +20,7 @@ From v1.4.1 install the `gmk` package:
 
 ```bash
 go install github.com/msdevbytes/gomicrokit/cmd/gmk@latest
-gmk version   # expect v1.4.1 or newer
+gmk version   # expect v1.4.2 or newer
 ```
 
 On Windows, `where gmk` should point at `%USERPROFILE%\go\bin\gmk.exe` (or your `GOBIN`). If `gmk version` is still old, that path is a leftover binary.

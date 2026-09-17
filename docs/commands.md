@@ -107,7 +107,7 @@ Empty `API_KEY` and the placeholder `change-me-in-prod` are replaced without `--
 
 ## `gmk version`
 
-Prints kit version, git commit, build date, Go version, and OS/arch. Tagged `v1.4.1` prints `gmk v1.4.1`. Git commit and build date stay `unknown` unless you pass ldflags (see the root README).
+Prints kit version, git commit, build date, Go version, and OS/arch. Tagged `v1.4.2` prints `gmk v1.4.2`. Git commit and build date stay `unknown` unless you pass ldflags (see the root README).
 
 ## `gmk update`
 
@@ -116,8 +116,8 @@ Installs the latest published `gmk` with `go install github.com/msdevbytes/gomic
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--check` | `false` | Print current vs latest; do not install |
-| `--to` | latest from the module proxy | Module version to install (`v1.4.1`, `latest`) |
+| `--to` | latest from the module proxy | Module version to install (`v1.4.2`, `latest`) |
 
 Local `dev` builds (if you set `cmd.Version` back to `dev`) are never treated as up to date, so `gmk update` will install the published module.
 
-`gmk update` installs the **latest git tag** the Go module proxy can see (for example `v1.4.1`). Untagged commits on `master` are not picked up until you tag and push that tag. The install path is `…/cmd/gmk` so the binary is named `gmk`, not `gomicrokit`.
+`gmk update` installs the **newest tag** from GitHub Releases and `proxy.golang.org` (whichever is higher). The proxy can lag a new tag by a few minutes; v1.4.2 will not tell you to install an older listing. The install path is `…/cmd/gmk` so the binary is named `gmk`, not `gomicrokit`.

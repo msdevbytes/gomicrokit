@@ -4,6 +4,13 @@ All notable changes to GMK (GoMicroKit) will be documented in this file.
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-09-17
+
+### Fixed
+- `gmk update --check` no longer treats a newer local version as behind a stale module-proxy `@latest`
+- `gmk update` will not downgrade (for example v1.4.1 → v1.4.0 while the proxy catches up)
+- Latest version is the higher of GitHub Releases and `proxy.golang.org`
+
 ## [1.4.1] - 2026-09-17
 
 ### Fixed

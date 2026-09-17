@@ -9,7 +9,7 @@ import (
 
 // Version information - Version is set for tagged releases; commit/date via ldflags.
 var (
-	Version   = "v1.4.1"
+	Version   = "v1.4.2"
 	GitCommit = "unknown"
 	BuildDate = "unknown"
 )

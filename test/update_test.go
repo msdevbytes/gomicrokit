@@ -33,7 +33,7 @@ func TestSameKitVersion(t *testing.T) {
 	}{
 		{current: "1.3.0", latest: "v1.3.0", want: true},
 		{current: "v1.3.0", latest: "v1.3.0", want: true},
-		{current: "1.2.0", latest: "v1.3.0", want: false},
+		{current: "v1.4.1", latest: "v1.4.0", want: false},
 		{current: "dev", latest: "v1.3.0", want: false},
 		{current: "unknown", latest: "v1.3.0", want: false},
 		{current: "", latest: "v1.3.0", want: false},
@@ -42,6 +42,51 @@ func TestSameKitVersion(t *testing.T) {
 		if got := SameKitVersion(tt.current, tt.latest); got != tt.want {
 			t.Fatalf("SameKitVersion(%q, %q) = %v, want %v", tt.current, tt.latest, got, tt.want)
 		}
+	}
+}
+
+func TestCompareKitVersion(t *testing.T) {
+	tests := []struct {
+		current, latest string
+		want            int
+	}{
+		{current: "v1.4.1", latest: "v1.4.0", want: 1},
+		{current: "v1.4.0", latest: "v1.4.1", want: -1},
+		{current: "1.4.1", latest: "v1.4.1", want: 0},
+		{current: "dev", latest: "v1.4.1", want: -1},
+	}
+	for _, tt := range tests {
+		if got := CompareKitVersion(tt.current, tt.latest); got != tt.want {
+			t.Fatalf("CompareKitVersion(%q, %q) = %d, want %d", tt.current, tt.latest, got, tt.want)
+		}
+	}
+}
+
+func TestRunUpdateSkipsDowngrade(t *testing.T) {
+	origVersion := Version
+	origFetch := FetchLatest
+	origLook := GoLookPath
+	origInstall := RunGoInstall
+	t.Cleanup(func() {
+		Version = origVersion
+		FetchLatest = origFetch
+		GoLookPath = origLook
+		RunGoInstall = origInstall
+	})
+	Version = "v1.4.1"
+	FetchLatest = func() (string, error) { return "v1.4.0", nil }
+	GoLookPath = func(file string) (string, error) { return "/usr/bin/" + file, nil }
+	var installed string
+	RunGoInstall = func(mod string) error {
+		installed = mod
+		return nil
+	}
+
+	if err := RunUpdate(false, ""); err != nil {
+		t.Fatal(err)
+	}
+	if installed != "" {
+		t.Fatalf("would have downgraded to %q", installed)
 	}
 }
 

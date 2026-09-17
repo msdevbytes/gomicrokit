@@ -104,7 +104,7 @@ Each generated project also gets a **README** with run commands for that stack.
 | `gmk make:service` | inside the project | Add a domain service (REST CRUD or gRPC stub) |
 | `gmk remove:service` | inside the project | Remove a service generated less than 1 minute ago (`--force` after that) |
 | `gmk key:generate` | inside the project | Write a Stripe-style `svc_test_…` `API_KEY` into `.env` (`--force` to rotate) |
-| `gmk update` | anywhere | Install the latest kit (`--check` to preview, `--to v1.4.1` to pin) |
+| `gmk update` | anywhere | Install the latest kit (`--check` to preview, `--to v1.4.2` to pin) |
 | `gmk version` | anywhere | Print kit version |
 
 Full flags: [docs/commands.md](docs/commands.md).
@@ -135,13 +135,13 @@ Embed version data (use this when tagging a release so `gmk version` is not `dev
 
 ```bash
 go build -ldflags "\
-  -X 'github.com/msdevbytes/gomicrokit/cmd.Version=v1.4.1' \
+  -X 'github.com/msdevbytes/gomicrokit/cmd.Version=v1.4.2' \
   -X 'github.com/msdevbytes/gomicrokit/cmd.GitCommit=$(git rev-parse HEAD)' \
   -X 'github.com/msdevbytes/gomicrokit/cmd.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)'" \
   -o gmk .
 ```
 
-Tagged source sets `cmd.Version` (this release is `v1.4.1`). `go install github.com/msdevbytes/gomicrokit/cmd/gmk@v1.4.1` therefore prints that version. Git commit and build date stay `unknown` unless you pass the ldflags above.
+Tagged source sets `cmd.Version` (this release is `v1.4.2`). `go install github.com/msdevbytes/gomicrokit/cmd/gmk@v1.4.2` therefore prints that version. Git commit and build date stay `unknown` unless you pass the ldflags above.
 
 To publish a **new** version that `gmk update` and `go install @latest` can see:
 

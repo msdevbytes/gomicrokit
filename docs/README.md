@@ -11,4 +11,4 @@ How to install GMK, generate a service, and run it.
 | [Generated project](generated-project.md) | Layout, routes, `.env` |
 | [Troubleshooting](troubleshooting.md) | Something failed on first run |
 
-Keep the kit current with `gmk update` after a tagged GitHub release. Current kit docs match **v1.4.1**. Kit root: [README](../README.md). Changelog: [CHANGELOG.md](../CHANGELOG.md).
+Keep the kit current with `gmk update` after a tagged GitHub release. Current kit docs match **v1.4.2**. Kit root: [README](../README.md). Changelog: [CHANGELOG.md](../CHANGELOG.md).
