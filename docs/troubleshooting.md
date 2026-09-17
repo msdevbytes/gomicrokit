@@ -1,11 +1,24 @@
 # Troubleshooting
 
+## `unknown command "update"` (or missing `run` / `key:generate`)
+
+`go install github.com/msdevbytes/gomicrokit@latest` installs a binary named **`gomicrokit`**, not `gmk`. An older `gmk` (v1.3.0) can stay first on PATH.
+
+From v1.4.1 install the `gmk` package:
+
+```bash
+go install github.com/msdevbytes/gomicrokit/cmd/gmk@latest
+gmk version   # expect v1.4.1 or newer
+```
+
+On Windows, `where gmk` should point at `%USERPROFILE%\go\bin\gmk.exe` (or your `GOBIN`). If `gmk version` is still old, that path is a leftover binary.
+
 ## `gmk update` cannot overwrite the binary (Windows)
 
 Windows will not replace `gmk.exe` while it is running. Close other terminals using `gmk`, then run `gmk update` again, or:
 
 ```bash
-go install github.com/msdevbytes/gomicrokit@latest
+go install github.com/msdevbytes/gomicrokit/cmd/gmk@latest
 ```
 
 `gmk update` also needs `go` on PATH (same as install).
@@ -14,7 +27,7 @@ If `--check` still shows an older tag after you pushed new commits, the Go modul
 
 ## `gmk new` still shows the old arrow-key confirmation screen
 
-Rebuild the CLI from this repo (`go build -o gmk .`) and run that binary. An older `gmk` on `PATH` still uses the Bubble Tea flow when no name is given.
+Rebuild the CLI from this repo (`go install ./cmd/gmk`) and run that binary. An older `gmk` on `PATH` still uses the Bubble Tea flow when no name is given.
 
 ## Directory already exists
 

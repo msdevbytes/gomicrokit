@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	GMKInstallModule = "github.com/msdevbytes/gomicrokit"
+	GMKInstallModule = "github.com/msdevbytes/gomicrokit/cmd/gmk"
 	GMKProxyLatest   = "https://proxy.golang.org/github.com/msdevbytes/gomicrokit/@latest"
 )
 
@@ -40,7 +40,7 @@ Requires Go on PATH.
 Examples:
   gmk update
   gmk update --check
-  gmk update --to v1.4.0`,
+  gmk update --to v1.4.1`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if err := RunUpdate(updateCheck, updateTo); err != nil {
 			fmt.Printf("❌ %v\n", err)
@@ -51,7 +51,7 @@ Examples:
 
 func init() {
 	updateCmd.Flags().BoolVar(&updateCheck, "check", false, "Show current vs latest without installing")
-	updateCmd.Flags().StringVar(&updateTo, "to", "", "Install a specific module version (e.g. v1.4.0)")
+	updateCmd.Flags().StringVar(&updateTo, "to", "", "Install a specific module version (e.g. v1.4.1)")
 	rootCmd.AddCommand(updateCmd)
 }
 

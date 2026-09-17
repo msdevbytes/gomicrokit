@@ -4,6 +4,11 @@ All notable changes to GMK (GoMicroKit) will be documented in this file.
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-09-17
+
+### Fixed
+- `go install` and `gmk update` install the `gmk` binary (`github.com/msdevbytes/gomicrokit/cmd/gmk`). Installing the module root produced `gomicrokit` and left an older `gmk` on PATH.
+
 ## [1.4.0] - 2026-09-17
 
 ### Added
