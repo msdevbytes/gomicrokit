@@ -1,0 +1,11 @@
+package service
+
+type {{.Service}}Service struct{}
+
+func New{{.Service}}Service() *{{.Service}}Service {
+	return &{{.Service}}Service{}
+}
+
+func (s *{{.Service}}Service) Ping(message string) string {
+	return "pong:" + message
+}

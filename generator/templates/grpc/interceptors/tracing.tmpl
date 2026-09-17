@@ -1,0 +1,34 @@
+package interceptors
+
+import (
+	"context"
+	"time"
+
+	"google.golang.org/grpc"
+)
+
+type TraceLog struct {
+	Method    string
+	StartedAt time.Time
+	Finished  time.Time
+}
+
+func TracingUnaryServerInterceptor(sink func(TraceLog)) grpc.UnaryServerInterceptor {
+	return func(
+		ctx context.Context,
+		req any,
+		info *grpc.UnaryServerInfo,
+		handler grpc.UnaryHandler,
+	) (any, error) {
+		start := time.Now().UTC()
+		resp, err := handler(ctx, req)
+		if sink != nil {
+			sink(TraceLog{
+				Method:    info.FullMethod,
+				StartedAt: start,
+				Finished:  time.Now().UTC(),
+			})
+		}
+		return resp, err
+	}
+}

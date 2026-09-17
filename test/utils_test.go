@@ -1,9 +1,11 @@
-package generator
+package gmk_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	. "github.com/msdevbytes/gomicrokit/generator"
 )
 
 func TestIsValidGoIdent(t *testing.T) {
@@ -37,9 +39,9 @@ func TestIsValidGoIdent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := isValidGoIdent(tt.input)
+			got := IsValidGoIdent(tt.input)
 			if got != tt.want {
-				t.Errorf("isValidGoIdent(%q) = %v, want %v", tt.input, got, tt.want)
+				t.Errorf("IsValidGoIdent(%q) = %v, want %v", tt.input, got, tt.want)
 			}
 		})
 	}
@@ -63,9 +65,9 @@ func TestConvertToTitleCaseNoSpaces(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := convertToTitleCaseNoSpaces(tt.input)
+			got := ConvertToTitleCaseNoSpaces(tt.input)
 			if got != tt.want {
-				t.Errorf("convertToTitleCaseNoSpaces(%q) = %q, want %q", tt.input, got, tt.want)
+				t.Errorf("ConvertToTitleCaseNoSpaces(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
 	}
@@ -135,9 +137,9 @@ func TestWriteHistory(t *testing.T) {
 
 	t.Run("write new history", func(t *testing.T) {
 		files := []string{"file1.go", "file2.go"}
-		err := writeHistory("TestService", files)
+		err := WriteHistory("TestService", files)
 		if err != nil {
-			t.Errorf("writeHistory() error = %v", err)
+			t.Errorf("WriteHistory() error = %v", err)
 		}
 
 		// Verify file was created
@@ -148,9 +150,9 @@ func TestWriteHistory(t *testing.T) {
 
 	t.Run("update existing history", func(t *testing.T) {
 		files := []string{"file3.go", "file4.go"}
-		err := writeHistory("AnotherService", files)
+		err := WriteHistory("AnotherService", files)
 		if err != nil {
-			t.Errorf("writeHistory() error = %v", err)
+			t.Errorf("WriteHistory() error = %v", err)
 		}
 	})
 }
@@ -174,7 +176,13 @@ func TestCreateProjectStructure(t *testing.T) {
 	}
 
 	t.Run("create new project", func(t *testing.T) {
-		err := CreateProjectStructure("myproject", true)
+		err := CreateProjectStructure(ProjectConfig{
+			ProjectName: "myproject",
+			ProjectType: ProjectTypeREST,
+			WithDocker:  true,
+			WithAir:     true,
+			Features:    []string{"discovery"},
+		})
 		if err != nil {
 			t.Errorf("CreateProjectStructure() error = %v", err)
 		}
@@ -196,10 +204,53 @@ func TestCreateProjectStructure(t *testing.T) {
 		if _, err := os.Stat("myproject/Dockerfile"); os.IsNotExist(err) {
 			t.Error("Dockerfile was not created when withDocker=true")
 		}
+		if _, err := os.Stat("myproject/docker-compose.yml"); os.IsNotExist(err) {
+			t.Error("docker-compose.yml was not created when withDocker=true")
+		}
+		if _, err := os.Stat("myproject/.dockerignore"); os.IsNotExist(err) {
+			t.Error(".dockerignore was not created when withDocker=true")
+		}
+		if _, err := os.Stat("myproject/.air.docker.toml"); os.IsNotExist(err) {
+			t.Error(".air.docker.toml was not created when withDocker=true")
+		}
+		if _, err := os.Stat("myproject/.air.toml"); os.IsNotExist(err) {
+			t.Error(".air.toml was not created when withAir=true")
+		}
+		if _, err := os.Stat("myproject/internal/discovery/consul.go"); os.IsNotExist(err) {
+			t.Error("discovery file was not created when discovery feature enabled")
+		}
+	})
+
+	t.Run("create project with advanced feature files", func(t *testing.T) {
+		err := CreateProjectStructure(ProjectConfig{
+			ProjectName: "advancedproject",
+			ProjectType: ProjectTypeREST,
+			WithDocker:  false,
+			Features:    []string{"config", "messaging", "otel", "resilience"},
+		})
+		if err != nil {
+			t.Errorf("CreateProjectStructure() advanced error = %v", err)
+		}
+		expectedFiles := []string{
+			"advancedproject/internal/config/app_config.go",
+			"advancedproject/internal/messaging/nats.go",
+			"advancedproject/internal/resilience/policy.go",
+			"advancedproject/pkg/telemetry/otel.go",
+		}
+		for _, p := range expectedFiles {
+			if _, err := os.Stat(p); os.IsNotExist(err) {
+				t.Errorf("expected file %s was not created", p)
+			}
+		}
 	})
 
 	t.Run("create project without docker", func(t *testing.T) {
-		err := CreateProjectStructure("nodockerproject", false)
+		err := CreateProjectStructure(ProjectConfig{
+			ProjectName: "nodockerproject",
+			ProjectType: ProjectTypeREST,
+			WithDocker:  false,
+			WithAir:     false,
+		})
 		if err != nil {
 			t.Errorf("CreateProjectStructure() error = %v", err)
 		}
@@ -209,10 +260,22 @@ func TestCreateProjectStructure(t *testing.T) {
 		if _, err := os.Stat(dockerfilePath); !os.IsNotExist(err) {
 			t.Error("Dockerfile should not exist when withDocker=false")
 		}
+		composePath := filepath.Join("nodockerproject", "docker-compose.yml")
+		if _, err := os.Stat(composePath); !os.IsNotExist(err) {
+			t.Error("docker-compose.yml should not exist when withDocker=false")
+		}
+		airPath := filepath.Join("nodockerproject", ".air.toml")
+		if _, err := os.Stat(airPath); !os.IsNotExist(err) {
+			t.Error(".air.toml should not exist when withAir=false")
+		}
 	})
 
 	t.Run("empty project name", func(t *testing.T) {
-		err := CreateProjectStructure("", true)
+		err := CreateProjectStructure(ProjectConfig{
+			ProjectName: "",
+			ProjectType: ProjectTypeREST,
+			WithDocker:  true,
+		})
 		if err == nil {
 			t.Error("expected error for empty project name, got nil")
 		}
@@ -222,9 +285,49 @@ func TestCreateProjectStructure(t *testing.T) {
 		// Create directory first
 		os.Mkdir("existingproject", 0755)
 
-		err := CreateProjectStructure("existingproject", true)
+		err := CreateProjectStructure(ProjectConfig{
+			ProjectName: "existingproject",
+			ProjectType: ProjectTypeREST,
+			WithDocker:  true,
+		})
 		if err == nil {
 			t.Error("expected error for existing project, got nil")
+		}
+	})
+
+	t.Run("create grpc project", func(t *testing.T) {
+		err := CreateProjectStructure(ProjectConfig{
+			ProjectName: "grpcproject",
+			ProjectType: ProjectTypeGRPC,
+			WithDocker:  true,
+		})
+		if err != nil {
+			t.Errorf("CreateProjectStructure() grpc error = %v", err)
+		}
+		if _, err := os.Stat("grpcproject/internal/server/grpc"); os.IsNotExist(err) {
+			t.Error("expected grpc server directory was not created")
+		}
+		if _, err := os.Stat("grpcproject/api/proto/health.proto"); os.IsNotExist(err) {
+			t.Error("expected grpc proto file was not created")
+		}
+	})
+
+	t.Run("create project in nested output directory", func(t *testing.T) {
+		err := CreateProjectStructure(ProjectConfig{
+			ProjectName: "nestedproject",
+			OutputDir:   "sandbox/generated",
+			ProjectType: ProjectTypeREST,
+			WithDocker:  true,
+		})
+		if err != nil {
+			t.Errorf("CreateProjectStructure() nested output error = %v", err)
+		}
+		expectedRoot := filepath.Join("sandbox", "generated", "nestedproject")
+		if _, err := os.Stat(expectedRoot); os.IsNotExist(err) {
+			t.Errorf("expected nested project root %s was not created", expectedRoot)
+		}
+		if _, err := os.Stat(filepath.Join(expectedRoot, "cmd", "main.go")); os.IsNotExist(err) {
+			t.Error("expected nested project main.go was not created")
 		}
 	})
 }

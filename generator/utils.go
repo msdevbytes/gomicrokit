@@ -23,10 +23,10 @@ func GetGoModule() string {
 	return "unknown-module"
 }
 
-// isValidGoIdent checks if s is a valid Go identifier.
+// IsValidGoIdent checks if s is a valid Go identifier.
 // Go identifiers must start with a letter or underscore and contain only
 // letters, digits, and underscores.
-func isValidGoIdent(s string) bool {
+func IsValidGoIdent(s string) bool {
 	if s == "" {
 		return false
 	}
@@ -46,7 +46,7 @@ func isValidGoIdent(s string) bool {
 	return true
 }
 
-func writeHistory(name string, files []string) error {
+func WriteHistory(name string, files []string) error {
 	const historyFile = ".gen_history.json"
 
 	history := map[string]struct {
@@ -118,7 +118,44 @@ func updateRoutes(serviceName string) error {
 	return nil
 }
 
-func convertToTitleCaseNoSpaces(s string) string {
+func updateRoutesChi(serviceName string) error {
+	routesFile := "internal/api/router.go"
+	openLine := fmt.Sprintf("\t\tapi.Route(\"/%ss\", func(r chi.Router) {", strings.ToLower(serviceName))
+	registerLine := fmt.Sprintf("\t\t\thandler.New%sHandler(svc.%s).Register(r)", serviceName, serviceName)
+	closeLine := "\t\t})"
+
+	data, err := os.ReadFile(routesFile)
+	if err != nil {
+		return fmt.Errorf("cannot read routes file: %w", err)
+	}
+	if strings.Contains(string(data), registerLine) {
+		fmt.Println("📍 Route already exists in chi router")
+		return nil
+	}
+
+	lines := []string{}
+	inserted := false
+	for _, line := range strings.Split(string(data), "\n") {
+		lines = append(lines, line)
+		if !inserted && strings.Contains(line, "// gmk:register-services") {
+			lines = append(lines, openLine)
+			lines = append(lines, registerLine)
+			lines = append(lines, closeLine)
+			inserted = true
+		}
+	}
+	if !inserted {
+		return fmt.Errorf("could not find insertion point in chi router")
+	}
+
+	if err := os.WriteFile(routesFile, []byte(strings.Join(lines, "\n")), 0644); err != nil {
+		return fmt.Errorf("cannot write chi routes file: %w", err)
+	}
+	fmt.Println("📍 Updated chi router: internal/api/router.go")
+	return nil
+}
+
+func ConvertToTitleCaseNoSpaces(s string) string {
 	if s == "" {
 		return ""
 	}
@@ -233,5 +270,100 @@ func updateContainer(serviceName string) error {
 		return fmt.Errorf("cannot write container file: %w", err)
 	}
 	fmt.Println("📦 Updated: internal/service/container.go")
+	return nil
+}
+
+func updateGRPCContainer(serviceName string) error {
+	path := "internal/service/container.go"
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("cannot read grpc container file: %w", err)
+	}
+
+	fieldLine := fmt.Sprintf("\t%s *%sService", serviceName, serviceName)
+	assignLine := fmt.Sprintf("\t\t%s: New%sService(),", serviceName, serviceName)
+	content := string(data)
+
+	if strings.Contains(content, fieldLine) && strings.Contains(content, assignLine) {
+		fmt.Println("📦 gRPC container already up to date")
+		return nil
+	}
+
+	lines := []string{}
+	insertedField := false
+	insertedAssign := false
+	for _, line := range strings.Split(content, "\n") {
+		lines = append(lines, line)
+		if !insertedField && strings.Contains(line, "type Container struct {") {
+			lines = append(lines, fieldLine)
+			insertedField = true
+		}
+		if !insertedAssign && strings.Contains(line, "return &Container{") {
+			lines = append(lines, assignLine)
+			insertedAssign = true
+		}
+	}
+
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0644); err != nil {
+		return fmt.Errorf("cannot write grpc container file: %w", err)
+	}
+	fmt.Println("📦 Updated gRPC container: internal/service/container.go")
+	return nil
+}
+
+func updateGRPCServer(serviceName string) error {
+	path := "internal/server/grpc/server.go"
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("cannot read grpc server file: %w", err)
+	}
+
+	registerLine := fmt.Sprintf("\t_ = New%sServer(service.New%sService())", serviceName, serviceName)
+	content := string(data)
+	if strings.Contains(content, registerLine) {
+		fmt.Println("🛰️ gRPC service already registered")
+		return nil
+	}
+
+	importLine := "\t\"{{MODULE}}/internal/service\""
+	module := GetGoModule()
+	importLine = strings.ReplaceAll(importLine, "{{MODULE}}", module)
+
+	lines := []string{}
+	insertedImport := false
+	insertedRegister := false
+	inImportBlock := false
+	alreadyImported := strings.Contains(content, fmt.Sprintf("\"%s/internal/service\"", module))
+
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "import (") {
+			inImportBlock = true
+		}
+		if inImportBlock && trimmed == ")" && !alreadyImported {
+			lines = append(lines, importLine)
+			insertedImport = true
+		}
+		if strings.Contains(line, "// gmk:register-services") && !insertedRegister {
+			lines = append(lines, registerLine)
+			insertedRegister = true
+		}
+		lines = append(lines, line)
+		if inImportBlock && trimmed == ")" {
+			inImportBlock = false
+		}
+	}
+
+	if !alreadyImported && !insertedImport {
+		return fmt.Errorf("grpc server import block missing for service import insertion")
+	}
+	if !insertedRegister {
+		return fmt.Errorf("grpc server registration marker not found")
+	}
+
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0644); err != nil {
+		return fmt.Errorf("cannot write grpc server file: %w", err)
+	}
+	fmt.Println("🛰️ Updated gRPC server registrations")
 	return nil
 }

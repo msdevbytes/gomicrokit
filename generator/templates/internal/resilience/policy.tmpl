@@ -1,0 +1,27 @@
+package resilience
+
+import (
+	"time"
+
+	"github.com/sony/gobreaker"
+)
+
+type Policy struct {
+	Timeout time.Duration
+	Retry   int
+	Breaker *gobreaker.CircuitBreaker
+}
+
+func NewPolicy(service string) *Policy {
+	settings := gobreaker.Settings{
+		Name:        service,
+		MaxRequests: 3,
+		Interval:    30 * time.Second,
+		Timeout:     20 * time.Second,
+	}
+	return &Policy{
+		Timeout: 5 * time.Second,
+		Retry:   2,
+		Breaker: gobreaker.NewCircuitBreaker(settings),
+	}
+}

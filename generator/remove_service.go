@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	pathpkg "path"
 	"strings"
 	"time"
 )
@@ -16,7 +17,7 @@ func RemoveService(name string, force bool) error {
 	name = strings.ToLower(name)
 	service := strings.ToUpper(string(name[0])) + name[1:]
 
-	files, createdAt, err := readHistory(name)
+	files, createdAt, err := ReadHistory(name)
 	if err != nil {
 		return fmt.Errorf("cannot read history: %w", err)
 	}
@@ -26,30 +27,45 @@ func RemoveService(name string, force bool) error {
 		return fmt.Errorf("'%s' was created more than 1 minute ago (%s). Use --force to override", name, createdAt.Format(time.RFC822))
 	}
 
-	deleteFiles(files)
+	DeleteFiles(files)
 
-	cleanFromFile("internal/service/container.go", []string{
-		fmt.Sprintf("%s *%sService", service, service),
-		fmt.Sprintf("%s: New%sService(repository.New%sRepository(db))", service, service, service),
-		fmt.Sprintf("New%sService", service),
-	})
+	cfg := DetectProjectConfig(".")
+	if cfg.ProjectType == ProjectTypeGRPC {
+		cleanFromFile("internal/service/container.go", []string{
+			fmt.Sprintf("%s *%sService", service, service),
+			fmt.Sprintf("%s: New%sService()", service, service),
+		})
+		cleanFromFile("internal/server/grpc/server.go", []string{
+			fmt.Sprintf("New%sServer(service.New%sService())", service, service),
+		})
+		cleanUnusedImport("internal/server/grpc/server.go", fmt.Sprintf("%s/internal/service", GetGoModule()))
+	} else {
+		cleanFromFile("internal/service/container.go", []string{
+			fmt.Sprintf("%s *%sService", service, service),
+			fmt.Sprintf("%s: New%sService(repository.New%sRepository(db))", service, service, service),
+			fmt.Sprintf("New%sService", service),
+		})
 
-	fmt.Println("🔥 Removed:", fmt.Sprintf("%s/internal/repository", GetGoModule()))
-	cleanUnusedImport("internal/service/container.go", fmt.Sprintf("%s/internal/repository", GetGoModule()))
+		fmt.Println("🔥 Removed:", fmt.Sprintf("%s/internal/repository", GetGoModule()))
+		cleanUnusedImport("internal/service/container.go", fmt.Sprintf("%s/internal/repository", GetGoModule()))
 
-	cleanFromFile("internal/api/router.go", []string{
-		fmt.Sprintf("New%sHandler(svc.%s).Register(api.Group(\"/%ss\"))", service, service, name),
-	})
+		if cfg.Framework == string(FrameworkChi) {
+			cleanChiRoute(name, service)
+		} else {
+			cleanFromFile("internal/api/router.go", []string{
+				fmt.Sprintf("New%sHandler(svc.%s).Register(api.Group(\"/%ss\"))", service, service, name),
+			})
+		}
+	}
 
-	if err := removeFromHistory(name); err != nil {
+	if err := RemoveFromHistory(name); err != nil {
 		fmt.Printf("⚠️ Warning: failed to update history: %v\n", err)
 	}
 	fmt.Printf("✅ Service '%s' removed successfully.\n", name)
 	return nil
 }
 
-
-func deleteFiles(paths []string) {
+func DeleteFiles(paths []string) {
 	for _, p := range paths {
 		if err := os.Remove(p); err == nil {
 			fmt.Println("🗑️ Removed:", p)
@@ -75,7 +91,7 @@ func cleanFromFile(path string, patterns []string) {
 		shouldSkip := false
 		for _, pattern := range patterns {
 			// Match ignoring indentation
-			if strings.Contains(removeWhitespace(line), removeWhitespace(pattern)) {
+			if strings.Contains(RemoveWhitespace(line), RemoveWhitespace(pattern)) {
 				shouldSkip = true
 				break
 			}
@@ -101,11 +117,12 @@ func cleanUnusedImport(path string, importPath string) {
 
 	lines := strings.Split(string(data), "\n")
 	importUsed := false
+	importToken := pathpkg.Base(importPath) + "."
 
 	// Check if the import path is used anywhere in code (excluding import line)
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		if strings.Contains(trimmed, "repository.") && !strings.HasPrefix(trimmed, "import") && !strings.Contains(trimmed, importPath) {
+		if strings.Contains(trimmed, importToken) && !strings.HasPrefix(trimmed, "import") && !strings.Contains(trimmed, importPath) {
 			importUsed = true
 			break
 		}
@@ -155,7 +172,7 @@ func cleanUnusedImport(path string, importPath string) {
 	}
 }
 
-func readHistory(name string) ([]string, time.Time, error) {
+func ReadHistory(name string) ([]string, time.Time, error) {
 	const historyFile = ".gen_history.json"
 
 	history := map[string]struct {
@@ -184,7 +201,7 @@ func readHistory(name string) ([]string, time.Time, error) {
 	return entry.Files, t, nil
 }
 
-func removeFromHistory(name string) error {
+func RemoveFromHistory(name string) error {
 	const historyFile = ".gen_history.json"
 	history := map[string]interface{}{}
 
@@ -208,6 +225,50 @@ func removeFromHistory(name string) error {
 	return nil
 }
 
-func removeWhitespace(s string) string {
+func RemoveWhitespace(s string) string {
 	return strings.Join(strings.Fields(s), "")
+}
+
+func cleanChiRoute(name, service string) {
+	path := "internal/api/router.go"
+	data, err := os.ReadFile(path)
+	if err != nil {
+		fmt.Println("❌ Cannot open:", path)
+		return
+	}
+
+	openPattern := RemoveWhitespace(fmt.Sprintf("api.Route(\"/%ss\", func(r chi.Router) {", name))
+	registerPattern := RemoveWhitespace(fmt.Sprintf("handler.New%sHandler(svc.%s).Register(r)", service, service))
+	lines := strings.Split(string(data), "\n")
+	cleaned := []string{}
+	skipBlock := false
+	foundServiceLine := false
+
+	for _, line := range lines {
+		norm := RemoveWhitespace(line)
+		if norm == openPattern {
+			skipBlock = true
+			continue
+		}
+		if skipBlock {
+			if norm == registerPattern {
+				foundServiceLine = true
+				continue
+			}
+			if norm == "})" && foundServiceLine {
+				skipBlock = false
+				foundServiceLine = false
+				continue
+			}
+			cleaned = append(cleaned, line)
+			continue
+		}
+		cleaned = append(cleaned, line)
+	}
+
+	if err := os.WriteFile(path, []byte(strings.Join(cleaned, "\n")), 0644); err != nil {
+		fmt.Println("❌ Error writing cleaned chi route file:", err)
+	} else {
+		fmt.Println("✂️ Cleaned up chi route:", path)
+	}
 }

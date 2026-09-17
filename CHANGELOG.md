@@ -4,6 +4,32 @@ All notable changes to GMK (GoMicroKit) will be documented in this file.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-09-17
+
+### Added
+- Interactive `gmk new` wizard (survey) for protocol, framework, database, cache, Docker, Air, port, and optional features
+- REST **Chi** alongside Fiber; **gRPC** projects (`grpc-go`) with health, reflection, and optional interceptors
+- Database choices: MySQL, Postgres, SQLite (gRPC also supports `none`)
+- Optional features: `auth`, `cache`, `config`, `discovery`, `messaging`, `metrics`, `otel`, `resilience`, `tracing`
+- Feature-aware `docker-compose.yml` (only selected deps: MySQL/Postgres, Redis, NATS, Consul, OTel collector) plus `.dockerignore` and `otel-collector.yaml` when Docker + OpenTelemetry are enabled
+- Compose `app` live-reloads via Air and `docker compose up --watch` (no source bind mount)
+- Host Air config via `gmk new --air` (`.air.toml`)
+- `gmk run` (`gmk start`) starts Compose watch, host Air, or `go run` from `.gmkrc.json` (`--host`, `--detach`, `--no-watch`, `--dry-run`)
+- `gmk key:generate` writes a Stripe-style alphanumeric `API_KEY` (`svc_test_…` / `svc_live_…`) into `.env` (`--force` replaces an existing key)
+- `gmk update` / `gmk self-update` installs the latest tagged kit via `go install` (`--check`, `--to`)
+- `--output-dir`, `--port` (default `8000`), `--non-interactive`, `--save-config` on `gmk new`
+- Developer docs: README plus `docs/` (getting started, commands, features, Docker, generated project, troubleshooting)
+- MIT `LICENSE`
+- Kit tests under `test/`
+
+### Changed
+- `gmk new` with or without a name uses the same wizard and rejects a project directory that already exists
+- `--docker` (default on) writes Compose files, not only a Dockerfile
+- Generated `.env` database defaults match the selected engine so Compose can boot without extra edits
+- Database host publish port uses `DB_PORT_FORWARD` (falls back to 3306/5432); `DB_PORT` remains the engine port
+- Missing Redis, NATS, or Consul logs a warning and continues instead of crashing the process
+- Discovery stays off on the host (`DISCOVERY_PROVIDER=none`) unless Compose sets `consul`
+
 ## [1.3.0] - 2026-02-02
 
 ### Added

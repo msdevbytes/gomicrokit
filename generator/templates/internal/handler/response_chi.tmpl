@@ -1,0 +1,43 @@
+package handler
+
+import (
+	"encoding/json"
+	"net/http"
+)
+
+type APIResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Data    any    `json:"data,omitempty"`
+	Error   string `json:"error,omitempty"`
+}
+
+func writeJSON(w http.ResponseWriter, status int, payload any) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	return json.NewEncoder(w).Encode(payload)
+}
+
+func success(w http.ResponseWriter, data any) error {
+	return writeJSON(w, http.StatusOK, APIResponse{
+		Success: true,
+		Message: "Success",
+		Data:    data,
+	})
+}
+
+func created(w http.ResponseWriter, data any) error {
+	return writeJSON(w, http.StatusCreated, APIResponse{
+		Success: true,
+		Message: "Created",
+		Data:    data,
+	})
+}
+
+func errorResponse(w http.ResponseWriter, status int, err error) error {
+	return writeJSON(w, status, APIResponse{
+		Success: false,
+		Message: err.Error(),
+		Error:   err.Error(),
+	})
+}

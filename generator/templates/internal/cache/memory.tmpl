@@ -1,0 +1,52 @@
+package cache
+
+import (
+	"context"
+	"sync"
+	"time"
+)
+
+type memoryItem struct {
+	value     string
+	expiresAt time.Time
+}
+
+type MemoryClient struct {
+	mu    sync.RWMutex
+	items map[string]memoryItem
+}
+
+func NewMemoryClient() *MemoryClient {
+	return &MemoryClient{
+		items: make(map[string]memoryItem),
+	}
+}
+
+func (m *MemoryClient) Set(_ context.Context, key string, value string, ttl time.Duration) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	item := memoryItem{value: value}
+	if ttl > 0 {
+		item.expiresAt = time.Now().Add(ttl)
+	}
+	m.items[key] = item
+	return nil
+}
+
+func (m *MemoryClient) Get(_ context.Context, key string) (string, error) {
+	m.mu.RLock()
+	item, ok := m.items[key]
+	m.mu.RUnlock()
+	if !ok {
+		return "", nil
+	}
+
+	if !item.expiresAt.IsZero() && time.Now().After(item.expiresAt) {
+		m.mu.Lock()
+		delete(m.items, key)
+		m.mu.Unlock()
+		return "", nil
+	}
+	return item.value, nil
+}

@@ -1,0 +1,26 @@
+package telemetry
+
+import (
+	"context"
+	"time"
+)
+
+type TraceInfo struct {
+	TraceID   string
+	SpanName  string
+	Timestamp time.Time
+}
+
+type traceContextKey struct{}
+
+func WithTrace(ctx context.Context, info TraceInfo) context.Context {
+	if info.Timestamp.IsZero() {
+		info.Timestamp = time.Now().UTC()
+	}
+	return context.WithValue(ctx, traceContextKey{}, info)
+}
+
+func TraceFromContext(ctx context.Context) (TraceInfo, bool) {
+	info, ok := ctx.Value(traceContextKey{}).(TraceInfo)
+	return info, ok
+}

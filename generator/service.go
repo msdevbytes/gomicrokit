@@ -11,36 +11,49 @@ import (
 	"github.com/iancoleman/strcase"
 )
 
-//go:embed templates/internal/service/*.tmpl
+//go:embed templates/internal/service/*.tmpl templates/grpc/service/*.tmpl
 var serviceTemplates embed.FS
 
 type ServiceOptions struct {
-	Name       string
-	ModulePath string
-	Force      bool
-	DryRun     bool
+	Name        string
+	ModulePath  string
+	Force       bool
+	DryRun      bool
+	ProjectType ProjectType
+	Framework   string
 }
 
 func GenerateService(opt ServiceOptions) error {
-	if !isValidGoIdent(opt.Name) {
+	if !IsValidGoIdent(opt.Name) {
 		return fmt.Errorf("invalid service name: %s", opt.Name)
 	}
 
 	if opt.ModulePath == "" {
 		opt.ModulePath = GetGoModule()
 	}
+	if opt.ProjectType == "" {
+		opt.ProjectType = DetectProjectType(".")
+	}
+	if opt.Framework == "" {
+		cfg := DetectProjectConfig(".")
+		opt.Framework = cfg.Framework
+	}
+	if opt.Framework == "" && opt.ProjectType == ProjectTypeREST {
+		opt.Framework = string(FrameworkFiber)
+	}
 
 	// Derive naming
-	service := convertToTitleCaseNoSpaces(opt.Name)
-	receiver := convertToTitleCaseNoSpaces(opt.Name)
+	service := ConvertToTitleCaseNoSpaces(opt.Name)
+	receiver := ConvertToTitleCaseNoSpaces(opt.Name)
 	repo := strings.ToLower(service[:1]) + service[1:]
 	snake := strcase.ToSnake(opt.Name)
 
 	data := map[string]string{
-		"Service":    service,
-		"Receiver":   receiver,
-		"Repository": repo,
-		"Module":     opt.ModulePath,
+		"Service":      service,
+		"Receiver":     receiver,
+		"Repository":   repo,
+		"Module":       opt.ModulePath,
+		"ProtoPackage": snake,
 	}
 
 	files := map[string]string{
@@ -51,12 +64,24 @@ func GenerateService(opt ServiceOptions) error {
 		fmt.Sprintf("internal/dto/%s_dto.go", snake):               "dto.tmpl",
 		fmt.Sprintf("test/unit/dto/%s_input_test.go", snake):       "dto_test.tmpl",
 	}
+	templatePrefix := "templates/internal/service/"
+	if opt.ProjectType == ProjectTypeREST && opt.Framework == string(FrameworkChi) {
+		files[fmt.Sprintf("internal/handler/%s_handler.go", snake)] = "handler_chi.tmpl"
+	}
+	if opt.ProjectType == ProjectTypeGRPC {
+		files = map[string]string{
+			fmt.Sprintf("api/proto/%s.proto", snake):                "proto.tmpl",
+			fmt.Sprintf("internal/service/%s_service.go", snake):    "service.tmpl",
+			fmt.Sprintf("internal/server/grpc/%s_server.go", snake): "server.tmpl",
+		}
+		templatePrefix = "templates/grpc/service/"
+	}
 
 	generated := []string{}
 	skipped := []string{}
 
 	for path, tmplName := range files {
-		content, err := renderTemplate(tmplName, data)
+		content, err := renderTemplate(templatePrefix, tmplName, data)
 		if err != nil {
 			return err
 		}
@@ -94,13 +119,28 @@ func GenerateService(opt ServiceOptions) error {
 
 	if !opt.DryRun {
 		fileName := strcase.ToSnake(opt.Name)
-		if err := updateContainer(service); err != nil {
-			return fmt.Errorf("failed to update container: %w", err)
+		if opt.ProjectType == ProjectTypeGRPC {
+			if err := updateGRPCContainer(service); err != nil {
+				return fmt.Errorf("failed to update grpc container: %w", err)
+			}
+			if err := updateGRPCServer(service); err != nil {
+				return fmt.Errorf("failed to update grpc server registration: %w", err)
+			}
+		} else {
+			if err := updateContainer(service); err != nil {
+				return fmt.Errorf("failed to update container: %w", err)
+			}
+			var err error
+			if opt.Framework == string(FrameworkChi) {
+				err = updateRoutesChi(service)
+			} else {
+				err = updateRoutes(service)
+			}
+			if err != nil {
+				return fmt.Errorf("failed to update routes: %w", err)
+			}
 		}
-		if err := updateRoutes(service); err != nil {
-			return fmt.Errorf("failed to update routes: %w", err)
-		}
-		if err := writeHistory(opt.Name, generated); err != nil {
+		if err := WriteHistory(opt.Name, generated); err != nil {
 			fmt.Printf("⚠️ Warning: failed to write history: %v\n", err)
 		} else {
 			fmt.Println("📝 History updated in .gen_history.json")
@@ -111,8 +151,8 @@ func GenerateService(opt ServiceOptions) error {
 	return nil
 }
 
-func renderTemplate(name string, data map[string]string) (string, error) {
-	t, err := template.ParseFS(serviceTemplates, "templates/internal/service/"+name)
+func renderTemplate(prefix, name string, data map[string]string) (string, error) {
+	t, err := template.ParseFS(serviceTemplates, prefix+name)
 	if err != nil {
 		return "", err
 	}

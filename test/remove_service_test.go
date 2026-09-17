@@ -1,10 +1,12 @@
-package generator
+package gmk_test
 
 import (
 	"encoding/json"
 	"os"
 	"testing"
 	"time"
+
+	. "github.com/msdevbytes/gomicrokit/generator"
 )
 
 func TestRemoveService(t *testing.T) {
@@ -35,7 +37,7 @@ func TestReadHistory(t *testing.T) {
 	}
 
 	t.Run("history file not found", func(t *testing.T) {
-		_, _, err := readHistory("nonexistent")
+		_, _, err := ReadHistory("nonexistent")
 		if err == nil {
 			t.Error("expected error when history file doesn't exist")
 		}
@@ -55,7 +57,7 @@ func TestReadHistory(t *testing.T) {
 		os.WriteFile(".gen_history.json", data, 0644)
 		defer os.Remove(".gen_history.json")
 
-		_, _, err := readHistory("nonexistent")
+		_, _, err := ReadHistory("nonexistent")
 		if err == nil {
 			t.Error("expected error when service not in history")
 		}
@@ -76,9 +78,9 @@ func TestReadHistory(t *testing.T) {
 		os.WriteFile(".gen_history.json", data, 0644)
 		defer os.Remove(".gen_history.json")
 
-		files, createdAt, err := readHistory("testservice")
+		files, createdAt, err := ReadHistory("testservice")
 		if err != nil {
-			t.Errorf("readHistory() error = %v", err)
+			t.Errorf("ReadHistory() error = %v", err)
 		}
 		if len(files) != 2 {
 			t.Errorf("expected 2 files, got %d", len(files))
@@ -122,9 +124,9 @@ func TestRemoveFromHistory(t *testing.T) {
 		data, _ := json.MarshalIndent(history, "", "  ")
 		os.WriteFile(".gen_history.json", data, 0644)
 
-		err := removeFromHistory("testservice")
+		err := RemoveFromHistory("testservice")
 		if err != nil {
-			t.Errorf("removeFromHistory() error = %v", err)
+			t.Errorf("RemoveFromHistory() error = %v", err)
 		}
 
 		// Verify the service was removed
@@ -143,7 +145,7 @@ func TestRemoveFromHistory(t *testing.T) {
 	})
 
 	t.Run("no history file", func(t *testing.T) {
-		err := removeFromHistory("anyservice")
+		err := RemoveFromHistory("anyservice")
 		if err == nil {
 			t.Error("expected error when history file doesn't exist")
 		}
@@ -173,7 +175,7 @@ func TestDeleteFiles(t *testing.T) {
 	os.WriteFile("file2.go", []byte("test"), 0644)
 
 	// Delete files (including a non-existent one)
-	deleteFiles([]string{"file1.go", "file2.go", "nonexistent.go"})
+	DeleteFiles([]string{"file1.go", "file2.go", "nonexistent.go"})
 
 	// Verify files were deleted
 	if _, err := os.Stat("file1.go"); !os.IsNotExist(err) {
@@ -201,9 +203,9 @@ func TestRemoveWhitespace(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := removeWhitespace(tt.input)
+			got := RemoveWhitespace(tt.input)
 			if got != tt.want {
-				t.Errorf("removeWhitespace(%q) = %q, want %q", tt.input, got, tt.want)
+				t.Errorf("RemoveWhitespace(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
 	}

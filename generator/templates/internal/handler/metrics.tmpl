@@ -1,0 +1,32 @@
+package handler
+
+import (
+	"runtime"
+	"time"
+
+	"github.com/gofiber/fiber/v2"
+)
+
+type MetricsHandler struct{}
+
+func NewMetricsHandler() *MetricsHandler {
+	return &MetricsHandler{}
+}
+
+func (h *MetricsHandler) Register(router fiber.Router) {
+	router.Get("/", h.Snapshot)
+}
+
+func (h *MetricsHandler) Snapshot(c *fiber.Ctx) error {
+	var mem runtime.MemStats
+	runtime.ReadMemStats(&mem)
+	return c.JSON(APIResponse{
+		Success: true,
+		Message: "metrics snapshot",
+		Data: fiber.Map{
+			"goroutines": runtime.NumGoroutine(),
+			"heap_alloc": mem.HeapAlloc,
+			"timestamp":  time.Now().UTC().Format(time.RFC3339),
+		},
+	})
+}

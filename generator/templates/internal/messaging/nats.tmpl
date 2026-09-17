@@ -1,0 +1,30 @@
+package messaging
+
+import (
+	"time"
+
+	"{{.ModulePath}}/pkg/logger"
+
+	"github.com/nats-io/nats.go"
+)
+
+type NATSClient struct {
+	Conn *nats.Conn
+}
+
+func NewNATSClient(url string) (*NATSClient, error) {
+	conn, err := nats.Connect(url, nats.Timeout(3*time.Second))
+	if err != nil {
+		return nil, err
+	}
+	logger.Info("Connected to NATS at %s", url)
+	return &NATSClient{Conn: conn}, nil
+}
+
+func (c *NATSClient) Close() {
+	if c == nil || c.Conn == nil {
+		return
+	}
+	c.Conn.Close()
+	logger.Info("NATS connection closed")
+}

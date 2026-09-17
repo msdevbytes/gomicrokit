@@ -1,0 +1,32 @@
+package grpcserver
+
+import (
+	"context"
+
+	"{{.Module}}/internal/service"
+)
+
+type {{.Service}}Server struct {
+	svc *service.{{.Service}}Service
+}
+
+func New{{.Service}}Server(svc *service.{{.Service}}Service) *{{.Service}}Server {
+	return &{{.Service}}Server{svc: svc}
+}
+
+func (s *{{.Service}}Server) Ping(_ context.Context, req *PingRequest) (*PingResponse, error) {
+	return &PingResponse{Message: s.svc.Ping(req.GetMessage())}, nil
+}
+
+// Placeholder request/response until protobuf generation is wired into CLI.
+type PingRequest struct {
+	Message string
+}
+
+func (p *PingRequest) GetMessage() string {
+	return p.Message
+}
+
+type PingResponse struct {
+	Message string
+}

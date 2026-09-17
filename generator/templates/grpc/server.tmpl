@@ -1,0 +1,11 @@
+package grpcserver
+
+import (
+	"google.golang.org/grpc"
+)
+
+// Register wires service handlers into the grpc server.
+func Register(server *grpc.Server) {
+	_ = server
+	// gmk:register-services
+}

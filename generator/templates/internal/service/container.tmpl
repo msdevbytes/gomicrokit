@@ -1,11 +1,16 @@
 package service
 
-// Instructions:
-// Do not manually register services here unless absolutely necessary.
-// This code is designed to auto-register services dynamically.
-// Any manual changes might interfere with the auto-registration process.
-// Ensure that any new service follows the auto-registration conventions.
+{{- if eq .ProjectType "grpc" }}
+type Container struct {
+	// gmk appends service fields here
+}
 
+func NewContainer() *Container {
+	return &Container{
+		// gmk appends service constructors here
+	}
+}
+{{- else }}
 import (
 	"gorm.io/gorm"
 )
@@ -23,3 +28,4 @@ func NewContainer(db *gorm.DB) *Container {
 		// register auto
 	}
 }
+{{- end }}

@@ -1,0 +1,205 @@
+package bootstrap
+
+import (
+	"context"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+{{- if .HasDiscovery }}
+	"strconv"
+	"strings"
+{{- end }}
+
+	"{{.ModulePath}}/internal/api"
+{{- if .HasCache }}
+	"{{.ModulePath}}/internal/cache"
+{{- end }}
+{{- if .HasConfig }}
+	appcfg "{{.ModulePath}}/internal/config"
+{{- end }}
+{{- if .HasDiscovery }}
+	"{{.ModulePath}}/internal/discovery"
+{{- end }}
+	"{{.ModulePath}}/internal/db"
+{{- if .HasMessaging }}
+	"{{.ModulePath}}/internal/messaging"
+{{- end }}
+{{- if .HasResilience }}
+	"{{.ModulePath}}/internal/resilience"
+{{- end }}
+	"{{.ModulePath}}/internal/service"
+	"{{.ModulePath}}/pkg/logger"
+{{- if or .HasTracing .HasOTel }}
+	"{{.ModulePath}}/pkg/telemetry"
+{{- end }}
+)
+
+func Start() error {
+	shutdownTimeout := 10 * time.Second
+	listenPort := envOrDefault("PORT", "8000")
+{{- if .HasConfig }}
+	loadedConfig, err := appcfg.LoadAppConfig()
+	if err != nil {
+		return err
+	}
+	shutdownTimeout = loadedConfig.ShutdownTimeout
+	listenPort = loadedConfig.Port
+{{- end }}
+{{- if .HasAuth }}
+	warnIfAuthMisconfigured()
+{{- end }}
+	if err := db.OpenConnection(); err != nil {
+		logger.Danger("Please check database configuration and connectivity")
+		return err
+	}
+{{- if .HasCache }}
+{{- if eq .CacheStore "memory" }}
+	cacheClient := cache.NewMemoryClient()
+	_ = cacheClient
+	logger.Info("In-memory cache enabled")
+{{- else }}
+	cacheClient := cache.NewRedisClient(
+		envOrDefault("REDIS_HOST", "localhost")+":"+envOrDefault("REDIS_PORT", "6379"),
+		os.Getenv("REDIS_PASSWORD"),
+	)
+	if err := cacheClient.Client.Ping(context.Background()).Err(); err != nil {
+		logger.Warn("Redis ping failed: %v", err)
+	} else {
+		logger.Info("Redis cache connected")
+	}
+{{- end }}
+{{- end }}
+{{- if .HasMessaging }}
+	msgClient, err := messaging.NewNATSClient(envOrDefault("NATS_URL", "nats://127.0.0.1:4222"))
+	if err != nil {
+		logger.Warn("NATS connect failed: %v", err)
+	} else {
+		defer msgClient.Close()
+	}
+{{- end }}
+{{- if .HasResilience }}
+	policy := resilience.NewPolicy(envOrDefault("SERVICE_NAME", "{{.ProjectName}}"))
+	logger.Info("Resilience policy ready (timeout=%s retries=%d)", policy.Timeout, policy.Retry)
+{{- end }}
+{{- if .HasTracing }}
+	traceCtx := telemetry.WithTrace(context.Background(), telemetry.TraceInfo{
+		TraceID:  "bootstrap",
+		SpanName: "chi_startup",
+	})
+	if info, ok := telemetry.TraceFromContext(traceCtx); ok {
+		logger.Debug("Tracing enabled: %s", info.SpanName)
+	}
+{{- end }}
+{{- if .HasOTel }}
+	otelShutdown, err := telemetry.InitOTel(context.Background(), telemetry.OTelConfig{
+		ServiceName: envOrDefault("SERVICE_NAME", "{{.ProjectName}}"),
+		Endpoint:    envOrDefault("OTEL_EXPORTER_OTLP_ENDPOINT", ""),
+	})
+	if err != nil {
+		logger.Warn("OpenTelemetry init failed: %v", err)
+	} else {
+		defer func() { _ = otelShutdown(context.Background()) }()
+	}
+{{- end }}
+
+	svc := service.NewContainer(db.Conn)
+	router := api.Register(svc)
+
+	addr := ":" + listenPort
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           router,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+{{- if .HasDiscovery }}
+	registration, err := registerServiceForDiscovery(
+		envOrDefault("SERVICE_NAME", "{{.ProjectName}}"),
+		envOrDefault("SERVICE_ID", ""),
+		envOrDefault("SERVICE_HOST", "127.0.0.1"),
+		listenPort,
+		parseTags(envOrDefault("SERVICE_TAGS", "rest,chi")),
+	)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if registration != nil {
+			if err := registration.Deregister(); err != nil {
+				logger.Warn("Service deregistration failed: %v", err)
+			}
+		}
+	}()
+{{- end }}
+	errCh := make(chan error, 1)
+	go func() {
+		logger.Info("HTTP server listening on %s", addr)
+		errCh <- server.ListenAndServe()
+	}()
+	return waitForStop(errCh, shutdownTimeout, func(ctx context.Context) error {
+		return server.Shutdown(ctx)
+	})
+}
+
+func envOrDefault(key, fallback string) string {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	return v
+}
+
+func warnIfAuthMisconfigured() {
+	env := envOrDefault("APP_ENV", "dev")
+	apiKey := os.Getenv("API_KEY")
+	if env != "dev" && (apiKey == "" || apiKey == "change-me-in-prod") {
+		logger.Warn("Auth enabled but API_KEY is empty/default in APP_ENV=%s", env)
+	}
+}
+
+func waitForStop(serverErr <-chan error, timeout time.Duration, stop func(context.Context) error) error {
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
+
+	select {
+	case sig := <-sigCh:
+		logger.Info("Received signal %s, shutting down...", sig.String())
+	case err := <-serverErr:
+		if err != nil && err != http.ErrServerClosed {
+			return err
+		}
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	return stop(ctx)
+}
+
+{{- if .HasDiscovery }}
+func parseTags(raw string) []string {
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		v := strings.TrimSpace(p)
+		if v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+func registerServiceForDiscovery(name, id, host, portRaw string, tags []string) (*discovery.Registration, error) {
+	port, err := strconv.Atoi(portRaw)
+	if err != nil {
+		return nil, err
+	}
+	registrar := discovery.NewConsulRegistrar(envOrDefault("CONSUL_ADDRESS", "127.0.0.1:8500"))
+	if !registrar.Enabled() {
+		return nil, nil
+	}
+	return registrar.Register(name, id, host, port, tags)
+}
+{{- end }}

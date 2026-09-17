@@ -1,0 +1,139 @@
+package handler
+
+import (
+	"encoding/json"
+	"errors"
+	"net/http"
+	"strconv"
+
+	"{{.Module}}/internal/dto"
+	"{{.Module}}/internal/model"
+	"{{.Module}}/internal/service"
+
+	"github.com/go-chi/chi/v5"
+)
+
+type {{.Service}}Handler struct {
+	svc *service.{{.Service}}Service
+}
+
+func New{{.Service}}Handler(svc *service.{{.Service}}Service) *{{.Service}}Handler {
+	return &{{.Service}}Handler{svc: svc}
+}
+
+func (h *{{.Service}}Handler) Register(router chi.Router) {
+	router.Get("/", h.list)
+	router.Post("/", h.create)
+	router.Get("/{id}", h.get)
+	router.Put("/{id}", h.update)
+	router.Delete("/{id}", h.delete)
+}
+
+func (h *{{.Service}}Handler) list(w http.ResponseWriter, r *http.Request) {
+	page := parseQueryInt(r, "page", 1)
+	limit := parseQueryInt(r, "limit", 10)
+
+	items, total, err := h.svc.List(page, limit)
+	if err != nil {
+		_ = errorResponse(w, http.StatusInternalServerError, errors.New("failed to fetch items"))
+		return
+	}
+
+	_ = success(w, map[string]any{
+		"data":  items,
+		"total": total,
+		"page":  page,
+		"limit": limit,
+	})
+}
+
+func (h *{{.Service}}Handler) get(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		_ = errorResponse(w, http.StatusBadRequest, errors.New("ID is required"))
+		return
+	}
+
+	item, err := h.svc.GetByID(id)
+	if err != nil {
+		_ = errorResponse(w, http.StatusNotFound, errors.New("item not found"))
+		return
+	}
+
+	_ = success(w, item)
+}
+
+func (h *{{.Service}}Handler) create(w http.ResponseWriter, r *http.Request) {
+	var input dto.Create{{.Service}}Input
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		_ = errorResponse(w, http.StatusBadRequest, errors.New("invalid request body"))
+		return
+	}
+
+	item := &model.{{.Service}}{
+		Name: input.Name,
+	}
+	if err := h.svc.Create(item); err != nil {
+		_ = errorResponse(w, http.StatusInternalServerError, errors.New("failed to create item"))
+		return
+	}
+
+	_ = created(w, item)
+}
+
+func (h *{{.Service}}Handler) update(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		_ = errorResponse(w, http.StatusBadRequest, errors.New("ID is required"))
+		return
+	}
+
+	item, err := h.svc.GetByID(id)
+	if err != nil {
+		_ = errorResponse(w, http.StatusNotFound, errors.New("item not found"))
+		return
+	}
+
+	var input dto.Update{{.Service}}Input
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		_ = errorResponse(w, http.StatusBadRequest, errors.New("invalid request body"))
+		return
+	}
+
+	if input.Name != "" {
+		item.Name = input.Name
+	}
+
+	if err := h.svc.Update(item); err != nil {
+		_ = errorResponse(w, http.StatusInternalServerError, errors.New("failed to update item"))
+		return
+	}
+
+	_ = success(w, item)
+}
+
+func (h *{{.Service}}Handler) delete(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		_ = errorResponse(w, http.StatusBadRequest, errors.New("ID is required"))
+		return
+	}
+
+	if err := h.svc.Delete(id); err != nil {
+		_ = errorResponse(w, http.StatusInternalServerError, errors.New("failed to delete item"))
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func parseQueryInt(r *http.Request, key string, fallback int) int {
+	raw := r.URL.Query().Get(key)
+	if raw == "" {
+		return fallback
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil || v <= 0 {
+		return fallback
+	}
+	return v
+}

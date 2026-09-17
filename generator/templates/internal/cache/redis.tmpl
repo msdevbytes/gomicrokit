@@ -1,0 +1,29 @@
+package cache
+
+import (
+	"context"
+	"time"
+
+	"github.com/redis/go-redis/v9"
+)
+
+type RedisClient struct {
+	Client *redis.Client
+}
+
+func NewRedisClient(addr, password string) *RedisClient {
+	return &RedisClient{
+		Client: redis.NewClient(&redis.Options{
+			Addr:     addr,
+			Password: password,
+		}),
+	}
+}
+
+func (r *RedisClient) Set(ctx context.Context, key string, value string, ttl time.Duration) error {
+	return r.Client.Set(ctx, key, value, ttl).Err()
+}
+
+func (r *RedisClient) Get(ctx context.Context, key string) (string, error) {
+	return r.Client.Get(ctx, key).Result()
+}

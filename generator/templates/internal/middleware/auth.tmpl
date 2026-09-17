@@ -1,0 +1,19 @@
+package middleware
+
+import "github.com/gofiber/fiber/v2"
+
+// RequireAPIKey is a minimal auth stub users can replace with JWT/OAuth.
+func RequireAPIKey(headerName, expected string) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if expected == "" {
+			return c.Next()
+		}
+		if c.Get(headerName) != expected {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"success": false,
+				"message": "unauthorized",
+			})
+		}
+		return c.Next()
+	}
+}

@@ -1,0 +1,70 @@
+package telemetry
+
+import (
+	"context"
+	"os"
+	"strings"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+)
+
+type OTelConfig struct {
+	ServiceName string
+	Endpoint    string
+}
+
+func InitOTel(ctx context.Context, cfg OTelConfig) (func(context.Context) error, error) {
+	serviceName := strings.TrimSpace(cfg.ServiceName)
+	if serviceName == "" {
+		serviceName = "service"
+	}
+	res, err := resource.Merge(
+		resource.Default(),
+		resource.NewSchemaless(
+			attribute.String("service.name", serviceName),
+			attribute.String("deployment.environment", envOrDefault("APP_ENV", "dev")),
+		),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	var tp *sdktrace.TracerProvider
+	if endpoint := strings.TrimSpace(cfg.Endpoint); endpoint != "" {
+		exporter, err := otlptracegrpc.New(ctx, otlptracegrpc.WithEndpoint(endpoint), otlptracegrpc.WithInsecure())
+		if err != nil {
+			return nil, err
+		}
+		tp = sdktrace.NewTracerProvider(
+			sdktrace.WithBatcher(exporter),
+			sdktrace.WithResource(res),
+		)
+	} else {
+		exporter, err := stdouttrace.New(stdouttrace.WithPrettyPrint())
+		if err != nil {
+			return nil, err
+		}
+		tp = sdktrace.NewTracerProvider(
+			sdktrace.WithBatcher(exporter),
+			sdktrace.WithResource(res),
+		)
+	}
+
+	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+	return tp.Shutdown, nil
+}
+
+func envOrDefault(key, fallback string) string {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return fallback
+	}
+	return v
+}

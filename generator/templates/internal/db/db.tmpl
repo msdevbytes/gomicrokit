@@ -6,7 +6,13 @@ import (
 	"{{.ModulePath}}/internal/config"
 	"{{.ModulePath}}/pkg/logger"
 
+{{- if eq .DBType "postgres" }}
+	"gorm.io/driver/postgres"
+{{- else if eq .DBType "sqlite" }}
+	"github.com/glebarez/sqlite"
+{{- else }}
 	"gorm.io/driver/mysql"
+{{- end }}
 	"gorm.io/gorm"
 )
 
@@ -15,12 +21,25 @@ var Conn *gorm.DB
 func OpenConnection() error {
 	cfg := config.DBConfig()
 
+{{- if eq .DBType "postgres" }}
+	dsn := fmt.Sprintf(
+		"host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=UTC",
+		cfg.DBHost, cfg.DBUser, cfg.DBPassword, cfg.DBName, cfg.DBPort,
+	)
+	dbConn, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+{{- else if eq .DBType "sqlite" }}
+	dbPath := cfg.DBName
+	if dbPath == "" {
+		dbPath = "service.db"
+	}
+	dbConn, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+{{- else }}
 	dsn := fmt.Sprintf(
 		"%s:%s@tcp(%s:%s)/%s?parseTime=true&loc=UTC&time_zone='%%2B00:00'",
 		cfg.DBUser, cfg.DBPassword, cfg.DBHost, cfg.DBPort, cfg.DBName,
 	)
-
 	dbConn, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
+{{- end }}
 	if err != nil {
 		return err
 	}

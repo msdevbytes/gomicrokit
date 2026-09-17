@@ -1,31 +1,305 @@
 package bootstrap
 
 import (
+	"context"
+{{- if eq .ProjectType "grpc" }}
+	"net"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
+{{- if .HasDiscovery }}
+	"strconv"
+	"strings"
+{{- end }}
+
+	grpcpkg "google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/reflection"
+{{- if .HasOTel }}
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+{{- end }}
+{{- if .HasCache }}
+	"{{.ModulePath}}/internal/cache"
+{{- end }}
+{{- if .HasConfig }}
+	appcfg "{{.ModulePath}}/internal/config"
+{{- end }}
+{{- if .HasDiscovery }}
+	"{{.ModulePath}}/internal/discovery"
+{{- end }}
+{{- if .HasMessaging }}
+	"{{.ModulePath}}/internal/messaging"
+{{- end }}
+{{- if .HasResilience }}
+	"{{.ModulePath}}/internal/resilience"
+{{- end }}
+{{- if ne .DBType "none" }}
+	"{{.ModulePath}}/internal/db"
+{{- end }}
+	grpcserver "{{.ModulePath}}/internal/server/grpc"
+{{- if or .HasAuth .HasMetrics .HasTracing }}
+	"{{.ModulePath}}/internal/server/grpc/interceptors"
+{{- end }}
+{{- if or .HasTracing .HasOTel }}
+	"{{.ModulePath}}/pkg/telemetry"
+{{- end }}
+	"{{.ModulePath}}/pkg/logger"
+{{- else }}
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+{{- if .HasDiscovery }}
+	"strconv"
+	"strings"
+{{- end }}
+
+	"{{.ModulePath}}/internal/api"
+{{- if .HasCache }}
+	"{{.ModulePath}}/internal/cache"
+{{- end }}
+{{- if .HasConfig }}
+	appcfg "{{.ModulePath}}/internal/config"
+{{- end }}
+{{- if .HasDiscovery }}
+	"{{.ModulePath}}/internal/discovery"
+{{- end }}
+	"{{.ModulePath}}/internal/db"
+	"{{.ModulePath}}/internal/handler"
+{{- if .HasMessaging }}
+	"{{.ModulePath}}/internal/messaging"
+{{- end }}
+{{- if .HasResilience }}
+	"{{.ModulePath}}/internal/resilience"
+{{- end }}
+	"{{.ModulePath}}/internal/service"
+	"{{.ModulePath}}/pkg/logger"
+{{- if or .HasTracing .HasOTel }}
+	"{{.ModulePath}}/pkg/telemetry"
+{{- end }}
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/compress"
 	"github.com/gofiber/fiber/v2/middleware/etag"
 	"github.com/gofiber/fiber/v2/middleware/helmet"
-	"github.com/gofiber/fiber/v2/middleware/monitor"
-	"github.com/shahbazkrispx/pkgcommon"
-
 	"github.com/gofiber/fiber/v2/middleware/recover"
-	"{{.ModulePath}}/internal/db"
-	"{{.ModulePath}}/internal/api"
-	"{{.ModulePath}}/internal/service"
-	"{{.ModulePath}}/pkg/logger"
+{{- end }}
 )
 
 func Start() error {
-
-	time.Local = time.UTC
-
-	if err := db.OpenConnection(); err != nil {
-		logger.Danger("Please check mysql server")
+{{- if eq .ProjectType "grpc" }}
+	shutdownTimeout := 10 * time.Second
+	listenPort := envOrDefault("PORT", "50051")
+{{- if .HasConfig }}
+	loadedConfig, err := appcfg.LoadAppConfig()
+	if err != nil {
 		return err
 	}
+	shutdownTimeout = loadedConfig.ShutdownTimeout
+	listenPort = loadedConfig.Port
+{{- end }}
+{{- if .HasAuth }}
+	warnIfAuthMisconfigured()
+{{- end }}
+{{- if .HasCache }}
+{{- if eq .CacheStore "memory" }}
+	cacheClient := cache.NewMemoryClient()
+	_ = cacheClient
+	logger.Info("In-memory cache enabled")
+{{- else }}
+	cacheClient := cache.NewRedisClient(
+		envOrDefault("REDIS_HOST", "localhost")+":"+envOrDefault("REDIS_PORT", "6379"),
+		os.Getenv("REDIS_PASSWORD"),
+	)
+	if err := cacheClient.Client.Ping(context.Background()).Err(); err != nil {
+		logger.Warn("Redis ping failed: %v", err)
+	} else {
+		logger.Info("Redis cache connected")
+	}
+{{- end }}
+{{- end }}
+{{- if ne .DBType "none" }}
+	if err := db.OpenConnection(); err != nil {
+		logger.Danger("Please check database configuration and connectivity")
+		return err
+	}
+	defer func() {
+		if err := db.CloseConnect(); err != nil {
+			logger.Warn("DB close failed: %v", err)
+		}
+	}()
+{{- end }}
+{{- if .HasMessaging }}
+	msgClient, err := messaging.NewNATSClient(envOrDefault("NATS_URL", "nats://127.0.0.1:4222"))
+	if err != nil {
+		logger.Warn("NATS connect failed: %v", err)
+	} else {
+		defer msgClient.Close()
+	}
+{{- end }}
+{{- if .HasResilience }}
+	policy := resilience.NewPolicy(envOrDefault("SERVICE_NAME", "{{.ProjectName}}"))
+	logger.Info("Resilience policy ready (timeout=%s retries=%d)", policy.Timeout, policy.Retry)
+{{- end }}
+{{- if .HasTracing }}
+	traceCtx := telemetry.WithTrace(context.Background(), telemetry.TraceInfo{
+		TraceID:  "bootstrap",
+		SpanName: "grpc_startup",
+	})
+	if info, ok := telemetry.TraceFromContext(traceCtx); ok {
+		logger.Debug("Tracing enabled: %s", info.SpanName)
+	}
+{{- end }}
+{{- if .HasOTel }}
+	otelShutdown, err := telemetry.InitOTel(context.Background(), telemetry.OTelConfig{
+		ServiceName: envOrDefault("SERVICE_NAME", "{{.ProjectName}}"),
+		Endpoint:    envOrDefault("OTEL_EXPORTER_OTLP_ENDPOINT", ""),
+	})
+	if err != nil {
+		logger.Warn("OpenTelemetry init failed: %v", err)
+	} else {
+		defer func() { _ = otelShutdown(context.Background()) }()
+	}
+{{- end }}
+	lis, err := net.Listen("tcp", ":"+listenPort)
+	if err != nil {
+		return err
+	}
+	opts := []grpcpkg.ServerOption{}
+{{- if .HasOTel }}
+	opts = append(opts, grpcpkg.StatsHandler(otelgrpc.NewServerHandler()))
+{{- end }}
+{{- if or .HasAuth .HasMetrics .HasTracing }}
+	unaryInterceptors := []grpcpkg.UnaryServerInterceptor{}
+{{- if .HasMetrics }}
+	unaryInterceptors = append(unaryInterceptors, interceptors.MetricsUnaryServerInterceptor())
+{{- end }}
+{{- if .HasAuth }}
+	authHeader := envOrDefault("AUTH_HEADER", "x-api-key")
+	unaryInterceptors = append(unaryInterceptors, interceptors.APIKeyUnaryServerInterceptor(authHeader, os.Getenv("API_KEY")))
+{{- end }}
+{{- if .HasTracing }}
+	unaryInterceptors = append(unaryInterceptors, interceptors.TracingUnaryServerInterceptor(nil))
+{{- end }}
+	if len(unaryInterceptors) > 0 {
+		opts = append(opts, grpcpkg.ChainUnaryInterceptor(unaryInterceptors...))
+	}
+{{- end }}
+	server := grpcpkg.NewServer(opts...)
+	grpcserver.Register(server)
+	healthServer := health.NewServer()
+	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
+	healthpb.RegisterHealthServer(server, healthServer)
+	reflection.Register(server)
+{{- if .HasDiscovery }}
+	registration, err := registerServiceForDiscovery(
+		envOrDefault("SERVICE_NAME", "{{.ProjectName}}"),
+		envOrDefault("SERVICE_ID", ""),
+		envOrDefault("SERVICE_HOST", "127.0.0.1"),
+		listenPort,
+		parseTags(envOrDefault("SERVICE_TAGS", "grpc")),
+	)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if registration != nil {
+			if err := registration.Deregister(); err != nil {
+				logger.Warn("Service deregistration failed: %v", err)
+			}
+		}
+	}()
+{{- end }}
+
+	errCh := make(chan error, 1)
+	go func() {
+		logger.Info("gRPC server listening on %s", lis.Addr().String())
+		errCh <- server.Serve(lis)
+	}()
+	return waitForStop(errCh, shutdownTimeout, func(_ context.Context) error {
+		done := make(chan struct{})
+		go func() {
+			server.GracefulStop()
+			close(done)
+		}()
+		select {
+		case <-done:
+			return nil
+		case <-time.After(shutdownTimeout):
+			server.Stop()
+			return nil
+		}
+	})
+}
+{{- else }}
+	shutdownTimeout := 10 * time.Second
+	listenPort := envOrDefault("PORT", "8000")
+{{- if .HasConfig }}
+	loadedConfig, err := appcfg.LoadAppConfig()
+	if err != nil {
+		return err
+	}
+	shutdownTimeout = loadedConfig.ShutdownTimeout
+	listenPort = loadedConfig.Port
+{{- end }}
+{{- if .HasAuth }}
+	warnIfAuthMisconfigured()
+{{- end }}
+	if err := db.OpenConnection(); err != nil {
+		logger.Danger("Please check database configuration and connectivity")
+		return err
+	}
+{{- if .HasCache }}
+{{- if eq .CacheStore "memory" }}
+	cacheClient := cache.NewMemoryClient()
+	_ = cacheClient
+	logger.Info("In-memory cache enabled")
+{{- else }}
+	cacheClient := cache.NewRedisClient(
+		envOrDefault("REDIS_HOST", "localhost")+":"+envOrDefault("REDIS_PORT", "6379"),
+		os.Getenv("REDIS_PASSWORD"),
+	)
+	if err := cacheClient.Client.Ping(context.Background()).Err(); err != nil {
+		logger.Warn("Redis ping failed: %v", err)
+	} else {
+		logger.Info("Redis cache connected")
+	}
+{{- end }}
+{{- end }}
+{{- if .HasMessaging }}
+	msgClient, err := messaging.NewNATSClient(envOrDefault("NATS_URL", "nats://127.0.0.1:4222"))
+	if err != nil {
+		logger.Warn("NATS connect failed: %v", err)
+	} else {
+		defer msgClient.Close()
+	}
+{{- end }}
+{{- if .HasResilience }}
+	policy := resilience.NewPolicy(envOrDefault("SERVICE_NAME", "{{.ProjectName}}"))
+	logger.Info("Resilience policy ready (timeout=%s retries=%d)", policy.Timeout, policy.Retry)
+{{- end }}
+{{- if .HasTracing }}
+	traceCtx := telemetry.WithTrace(context.Background(), telemetry.TraceInfo{
+		TraceID:  "bootstrap",
+		SpanName: "http_startup",
+	})
+	if info, ok := telemetry.TraceFromContext(traceCtx); ok {
+		logger.Debug("Tracing enabled: %s", info.SpanName)
+	}
+{{- end }}
+{{- if .HasOTel }}
+	otelShutdown, err := telemetry.InitOTel(context.Background(), telemetry.OTelConfig{
+		ServiceName: envOrDefault("SERVICE_NAME", "{{.ProjectName}}"),
+		Endpoint:    envOrDefault("OTEL_EXPORTER_OTLP_ENDPOINT", ""),
+	})
+	if err != nil {
+		logger.Warn("OpenTelemetry init failed: %v", err)
+	} else {
+		defer func() { _ = otelShutdown(context.Background()) }()
+	}
+{{- end }}
 
 	svc := service.NewContainer(db.Conn)
 
@@ -35,7 +309,11 @@ func Start() error {
 			AppName:       os.Getenv("APP_NAME"),
 			CaseSensitive: true,
 			ErrorHandler: func(c *fiber.Ctx, err error) error {
-				return c.Status(fiber.StatusInternalServerError).JSON(pkgcommon.ResponseBuilder(false, err.Error(), nil, err))
+				return c.Status(fiber.StatusInternalServerError).JSON(handler.APIResponse{
+					Success: false,
+					Message: err.Error(),
+					Error:   err.Error(),
+				})
 			},
 		},
 	)
@@ -46,20 +324,104 @@ func Start() error {
 		Use(recover.New(recover.Config{
 			EnableStackTrace: true,
 			StackTraceHandler: func(c *fiber.Ctx, e any) {
-				c.Status(fiber.StatusInternalServerError).JSON(pkgcommon.ResponseBuilder(false, "Something went wrong.", nil, e))
+				_ = c.Status(fiber.StatusInternalServerError).JSON(handler.APIResponse{
+					Success: false,
+					Message: "Something went wrong.",
+				})
 			},
 		})).
 		Use(compress.New(compress.Config{
 			Level: compress.LevelBestSpeed,
 		}))
 
-	app.Get("/dashboard", monitor.New(monitor.Config{
-		Title: os.Getenv("APP_NAME"),
-		// APIOnly:    true,
-		FontURL: "https://fonts.googleapis.com/css2?family=Roboto:wght@300&display=swap",
-	}))
-
 	api.Register(app, svc)
+{{- if .HasDiscovery }}
+	registration, err := registerServiceForDiscovery(
+		envOrDefault("SERVICE_NAME", "{{.ProjectName}}"),
+		envOrDefault("SERVICE_ID", ""),
+		envOrDefault("SERVICE_HOST", "127.0.0.1"),
+		listenPort,
+		parseTags(envOrDefault("SERVICE_TAGS", "rest")),
+	)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if registration != nil {
+			if err := registration.Deregister(); err != nil {
+				logger.Warn("Service deregistration failed: %v", err)
+			}
+		}
+	}()
+{{- end }}
 
-	return app.Listen(":" + os.Getenv("PORT"))
+	addr := ":" + listenPort
+	errCh := make(chan error, 1)
+	go func() {
+		logger.Info("HTTP server listening on %s", addr)
+		errCh <- app.Listen(addr)
+	}()
+	return waitForStop(errCh, shutdownTimeout, func(_ context.Context) error {
+		return app.Shutdown()
+	})
 }
+{{- end }}
+
+func envOrDefault(key, fallback string) string {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	return v
+}
+
+func warnIfAuthMisconfigured() {
+	env := envOrDefault("APP_ENV", "dev")
+	apiKey := os.Getenv("API_KEY")
+	if env != "dev" && (apiKey == "" || apiKey == "change-me-in-prod") {
+		logger.Warn("Auth enabled but API_KEY is empty/default in APP_ENV=%s", env)
+	}
+}
+
+func waitForStop(serverErr <-chan error, timeout time.Duration, stop func(context.Context) error) error {
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
+
+	select {
+	case sig := <-sigCh:
+		logger.Info("Received signal %s, shutting down...", sig.String())
+	case err := <-serverErr:
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	return stop(ctx)
+}
+
+{{- if .HasDiscovery }}
+func parseTags(raw string) []string {
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		v := strings.TrimSpace(p)
+		if v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+func registerServiceForDiscovery(name, id, host, portRaw string, tags []string) (*discovery.Registration, error) {
+	port, err := strconv.Atoi(portRaw)
+	if err != nil {
+		return nil, err
+	}
+	registrar := discovery.NewConsulRegistrar(envOrDefault("CONSUL_ADDRESS", "127.0.0.1:8500"))
+	if !registrar.Enabled() {
+		return nil, nil
+	}
+	return registrar.Register(name, id, host, port, tags)
+}
+{{- end }}

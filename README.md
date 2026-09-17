@@ -1,24 +1,35 @@
 # GMK (GoMicroKit)
 
-A CLI tool for scaffolding Go microservices with clean architecture patterns.
+CLI that scaffolds a production-shaped Go microservice: **REST (Fiber or Chi)** or **gRPC**, optional database, and opt-in infra (cache, auth, NATS, Consul, OpenTelemetry).
 
-## Features
+You pick the stack once. The generated app is meant to run locally with **`gmk run`**, then grow with `gmk make:service`.
 
-- Interactive project setup with Bubble Tea TUI
-- Repository pattern with GORM
-- Service layer architecture
-- REST API handlers (Fiber)
-- Docker support
-- Auto-generated tests
-- Service generation and removal
+```text
+gmk new myservice  →  gmk run  →  http://localhost:8000
+                           ↓
+                    gmk make:service --name user
+```
 
-## Installation
+## Requirements
+
+- **Go 1.25+** to build this kit (`go.mod`). Generated modules stamp the Go version of the `gmk` binary.
+- **Docker Engine + Compose v2** for the generated stack and live reload
+- Optional: [Air](https://github.com/air-verse/air) on the host (`gmk new --air`)
+
+## Install
 
 ```bash
 go install github.com/msdevbytes/gomicrokit@latest
 ```
 
-Or build from source:
+Later:
+
+```bash
+gmk update              # install latest
+gmk update --check      # show current vs latest without installing
+```
+
+From this repo:
 
 ```bash
 git clone https://github.com/msdevbytes/gomicrokit.git
@@ -26,210 +37,120 @@ cd gomicrokit
 go build -o gmk .
 ```
 
-## Quick Start
+On Windows the binary is `gmk.exe`. Confirm with `gmk version`.
 
-### Create a New Project
-
-Interactive mode:
-```bash
-gmk new
-```
-
-Non-interactive:
-```bash
-gmk new myproject --module github.com/user/myproject --db mysql --docker
-```
-
-Preview without creating files:
-```bash
-gmk new myproject --dry-run
-```
-
-### Generate a Service
+## Five-minute path
 
 ```bash
-gmk make:service
+gmk new myservice
+cd myservice
+gmk key:generate          # only if you enabled auth
+gmk run
 ```
 
-Or non-interactive:
-```bash
-gmk make:service --name user --force
-```
+Interactive `gmk new` asks for protocol, framework, database, cache, Docker, Air, and extra features. `--docker` defaults to **on** and writes Compose files that include **only** the services you selected.
 
-Preview generated code:
-```bash
-gmk make:service --name user --dry-run
-```
+Open the app at `http://localhost:8000` (or the port you chose). REST projects expose `/healthz` and `/readyz`.
 
-### Remove a Service
+Host-side run instead of the Compose `app` container:
 
 ```bash
-gmk remove:service
+gmk run --host
 ```
 
-Or with force (bypass time check):
-```bash
-gmk remove:service --name user --force
-```
+That starts only the dependency containers your stack needs, then `air` or `go run cmd/main.go`. `.env` still points at localhost.
 
-### Check Version
+## Recipes
 
 ```bash
-gmk version
+# REST + Fiber + MySQL (non-interactive defaults)
+gmk new myservice --non-interactive --module github.com/you/myservice
+
+# REST + Chi + Postgres
+gmk new myservice --non-interactive --framework chi --db postgres --module github.com/you/myservice
+
+# REST + auth + Redis + NATS
+gmk new myservice --non-interactive --features auth,cache,messaging --cache-store redis
+
+# gRPC with no database (wizard default). Flag default for --db is still mysql.
+gmk new myservice --non-interactive --type grpc --db none
+
+# Preview files, write nothing
+gmk new myservice --dry-run
 ```
+
+`--non-interactive` requires a project name. Without extra flags that means REST, Fiber, MySQL, Docker on, port `8000`, no extra features.
+
+## What you choose at generate time
+
+| Choice | Options |
+|--------|---------|
+| Protocol | `rest` or `grpc` |
+| REST framework | `fiber` (default) or `chi` |
+| Database | REST: `mysql`, `postgres`, `sqlite`. gRPC: those plus `none` |
+| Cache | off, or `redis` / `memory` (wizard step, or `--features cache --cache-store redis`) |
+| Port | default `8000` (`--port`) |
+| Docker | Dockerfile + feature-aware Compose (default on) |
+| Features | `auth`, `cache`, `config`, `discovery`, `messaging`, `metrics`, `otel`, `resilience`, `tracing` |
+
+Each generated project also gets a **README** with run commands for that stack.
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `new [name]` | Create a new microservice project |
-| `make:service` | Generate a new service (model, repo, handler, etc.) |
-| `remove:service` | Remove a previously generated service |
-| `version` | Print version information |
+| Command | Where to run it | What it does |
+|---------|-----------------|--------------|
+| `gmk new [name]` | anywhere | Scaffold a new project |
+| `gmk run` | inside the project | Start Compose watch, host Air, or `go run` from `.gmkrc.json` (alias `gmk start`) |
+| `gmk make:service` | inside the project | Add a domain service (REST CRUD or gRPC stub) |
+| `gmk remove:service` | inside the project | Remove a service generated less than 1 minute ago (`--force` after that) |
+| `gmk key:generate` | inside the project | Write a Stripe-style `svc_test_…` `API_KEY` into `.env` (`--force` to rotate) |
+| `gmk update` | anywhere | Install the latest kit (`--check` to preview, `--to v1.4.0` to pin) |
+| `gmk version` | anywhere | Print kit version |
 
-## Flags
+Full flags: [docs/commands.md](docs/commands.md).
 
-### `new` command
+## Documentation
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--module` | | Go module path (e.g., github.com/user/project) |
-| `--db` | mysql | Database type (mysql, postgres, sqlite) |
-| `--docker` | true | Include Dockerfile |
-| `--dry-run` | false | Preview what would be created |
+| Guide | Contents |
+|-------|----------|
+| [Getting started](docs/getting-started.md) | Wizard steps, recipes, first curl |
+| [Commands](docs/commands.md) | Every command and flag |
+| [Features](docs/features.md) | What each `--features` value wires in |
+| [Docker & live reload](docs/docker.md) | Compose, Watch, ports, `.env` |
+| [Generated project](docs/generated-project.md) | Layout, routes, environment |
+| [Troubleshooting](docs/troubleshooting.md) | Ports, Air loops, `gmk run` / `gmk update`, refused connections |
 
-### `make:service` command
+## Contributing to the kit
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--name` | | Service name (e.g., user, product) |
-| `--force` | false | Overwrite existing files |
-| `--dry-run` | false | Preview generated code |
+Kit tests live in `test/` (package `gmk_test`).
 
-## Generated Project Structure
-
-```
-myproject/
-├── cmd/
-│   └── main.go              # Application entry point
-├── internal/
-│   ├── api/
-│   │   └── router.go        # Route definitions
-│   ├── bootstrap/
-│   │   └── app.go           # App initialization
-│   ├── config/
-│   │   ├── db_config.go     # Database configuration
-│   │   └── pagination_config.go
-│   ├── db/
-│   │   ├── db.go            # Database connection
-│   │   └── migrations.go    # Auto-migrations
-│   ├── dto/
-│   │   └── pagination.go    # Shared DTOs
-│   ├── handler/
-│   │   ├── default.go       # Default handlers
-│   │   └── response.go      # Response helpers
-│   ├── model/
-│   │   └── base.go          # Base model with UUID
-│   ├── repository/          # Data access layer
-│   └── service/
-│       └── container.go     # Dependency injection
-├── pkg/
-│   └── logger/
-│       └── logger.go        # Logging utilities
-├── test/
-│   ├── mocks/
-│   └── unit/
-├── .env                     # Environment variables
-├── .gitignore
-├── Dockerfile
-├── go.mod
-└── .gen_history.json        # Service generation history
+```bash
+go test ./test
+go test ./...
+go build -o gmk .
+go run . new demo --dry-run --non-interactive
 ```
 
-## Generated Service Files
-
-When you run `gmk make:service --name user`, these files are created:
-
-```
-internal/
-├── model/user_model.go          # GORM model
-├── repository/user_repository.go # Repository interface + implementation
-├── service/user_service.go       # Business logic layer
-├── handler/user_handler.go       # REST handlers
-├── dto/user_dto.go              # Request/Response DTOs
-test/
-└── unit/dto/user_input_test.go  # DTO tests
-```
-
-### Generated Code Examples
-
-**Repository** - Full CRUD with pagination:
-```go
-type UserRepository interface {
-    FindAll(page, limit int) ([]model.User, int64, error)
-    FindByID(id string) (*model.User, error)
-    Create(entity *model.User) error
-    Update(entity *model.User) error
-    Delete(id string) error
-}
-```
-
-**Handler** - REST endpoints with validation:
-```go
-func (h *UserHandler) Register(router fiber.Router) {
-    router.Get("/", h.list)      // GET /users?page=1&limit=10
-    router.Post("/", h.create)   // POST /users
-    router.Get("/:id", h.get)    // GET /users/:id
-    router.Put("/:id", h.update) // PUT /users/:id
-    router.Delete("/:id", h.delete) // DELETE /users/:id
-}
-```
-
-## Environment Variables
-
-```env
-APP_NAME="My Service"
-APP_ENV=dev
-PORT=8000
-API_ROUTE_VERSION=/api/v1
-FORCE_MIGRATE=no
-DB_USER=root
-DB_PASSWORD=
-DB_HOST=127.0.0.1
-DB_NAME=mydb
-DB_PORT=3306
-```
-
-## Building with Version Info
+Embed version data (use this when tagging a release so `gmk version` is not `dev`):
 
 ```bash
 go build -ldflags "\
-  -X 'github.com/msdevbytes/gomicrokit/cmd.Version=1.0.0' \
+  -X 'github.com/msdevbytes/gomicrokit/cmd.Version=v1.4.0' \
   -X 'github.com/msdevbytes/gomicrokit/cmd.GitCommit=$(git rev-parse HEAD)' \
   -X 'github.com/msdevbytes/gomicrokit/cmd.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)'" \
   -o gmk .
 ```
 
-## Development
+Tagged source sets `cmd.Version` (this release is `v1.4.0`). `go install github.com/msdevbytes/gomicrokit@v1.4.0` therefore prints that version. Git commit and build date stay `unknown` unless you pass the ldflags above.
 
-```bash
-# Run tests
-go test ./... -v
+To publish a **new** version that `gmk update` and `go install @latest` can see:
 
-# Run with coverage
-go test ./... -cover
-
-# Build
-go build -o gmk .
-
-# Run locally
-go run . new myproject --dry-run
-```
+1. Move `[Unreleased]` in `CHANGELOG.md` to a dated section and set `cmd.Version`.
+2. `go test ./...`
+3. Push `master`.
+4. `git tag v1.5.0 && git push origin v1.5.0`
+5. Create a GitHub Release from that tag.
 
 ## License
 
-MIT
-
-## Credits
-
-Built by [msdevbytes](https://github.com/msdevbytes)
+MIT. See [LICENSE](LICENSE). Built by [msdevbytes](https://github.com/msdevbytes).

@@ -2,29 +2,58 @@ package handler
 
 import (
 	"github.com/gofiber/fiber/v2"
-	"github.com/shahbazkrispx/pkgcommon"
 )
 
+type APIResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Data    any    `json:"data,omitempty"`
+	Error   string `json:"error,omitempty"`
+}
+
 func success(c *fiber.Ctx, data any) error {
-	return c.Status(fiber.StatusOK).JSON(pkgcommon.ResponseBuilder(true, "Success", data, nil))
+	return c.Status(fiber.StatusOK).JSON(APIResponse{
+		Success: true,
+		Message: "Success",
+		Data:    data,
+	})
 }
 
 func created(c *fiber.Ctx, data any) error {
-	return c.Status(fiber.StatusCreated).JSON(pkgcommon.ResponseBuilder(true, "Success", data, nil))
+	return c.Status(fiber.StatusCreated).JSON(APIResponse{
+		Success: true,
+		Message: "Created",
+		Data:    data,
+	})
 }
 
 func badRequest(c *fiber.Ctx, err error) error {
-	return c.Status(fiber.StatusBadRequest).JSON(pkgcommon.ResponseBuilder(false, "Bad Request", nil, err))
+	return c.Status(fiber.StatusBadRequest).JSON(APIResponse{
+		Success: false,
+		Message: "Bad Request",
+		Error:   err.Error(),
+	})
 }
 
 func notFound(c *fiber.Ctx, msg string) error {
-	return c.Status(fiber.StatusNotFound).JSON(pkgcommon.ResponseBuilder(true, msg, nil, nil))
+	return c.Status(fiber.StatusNotFound).JSON(APIResponse{
+		Success: false,
+		Message: msg,
+	})
 }
 
 func serverError(c *fiber.Ctx, err error) error {
-	return c.Status(fiber.StatusInternalServerError).JSON(pkgcommon.ResponseBuilder(true, "Success", nil, err))
+	return c.Status(fiber.StatusInternalServerError).JSON(APIResponse{
+		Success: false,
+		Message: "Internal Server Error",
+		Error:   err.Error(),
+	})
 }
 
 func errorResponse(c *fiber.Ctx, status int, err error) error {
-	return c.Status(status).JSON(pkgcommon.ResponseBuilder(false, err.Error(), nil, err))
+	return c.Status(status).JSON(APIResponse{
+		Success: false,
+		Message: err.Error(),
+		Error:   err.Error(),
+	})
 }

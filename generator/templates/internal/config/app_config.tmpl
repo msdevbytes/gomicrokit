@@ -1,0 +1,47 @@
+package config
+
+import (
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+)
+
+type AppConfig struct {
+	AppName        string
+	AppEnv         string
+	Port           string
+	ShutdownTimeout time.Duration
+}
+
+func LoadAppConfig() (*AppConfig, error) {
+	cfg := &AppConfig{
+		AppName:        envOrDefault("APP_NAME", "{{.ProjectName}}"),
+		AppEnv:         envOrDefault("APP_ENV", "dev"),
+		Port:           envOrDefault("PORT", "{{.Port}}"),
+		ShutdownTimeout: mustDuration(envOrDefault("SHUTDOWN_TIMEOUT", "10s"), 10*time.Second),
+	}
+	if strings.TrimSpace(cfg.Port) == "" {
+		return nil, fmt.Errorf("PORT cannot be empty")
+	}
+	return cfg, nil
+}
+
+func envOrDefault(key, fallback string) string {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return fallback
+	}
+	return v
+}
+
+func mustDuration(raw string, fallback time.Duration) time.Duration {
+	if d, err := time.ParseDuration(raw); err == nil {
+		return d
+	}
+	if seconds, err := strconv.Atoi(raw); err == nil && seconds > 0 {
+		return time.Duration(seconds) * time.Second
+	}
+	return fallback
+}

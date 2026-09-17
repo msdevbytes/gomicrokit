@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package {{.ProtoPackage}};
+
+option go_package = "{{.Module}}/api/proto/{{.ProtoPackage}}pb;{{.ProtoPackage}}pb";
+
+service {{.Service}}Service {
+  rpc Ping(PingRequest) returns (PingResponse);
+}
+
+message PingRequest {
+  string message = 1;
+}
+
+message PingResponse {
+  string message = 1;
+}

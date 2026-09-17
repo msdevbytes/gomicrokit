@@ -31,6 +31,9 @@ coverage.out
 .vscode/
 .idea/
 .claude/
+.codex
+.copilot
+.cursor
 
 # ────────────────
 # Logs
@@ -43,6 +46,11 @@ coverage.out
 .env
 .env.*
 
+# ────────────────
+# Local tooling
+# ────────────────
+graphify-out
+
 
 # Generator history
 .gen_history.json
@@ -50,7 +58,12 @@ coverage.out
 msdevbytes
 msdevbytes.pub
 *.md
+!docs/**
 !README.md
 !CHANGELOG.md
 
 test_output/**
+*demo*
+
+mytestsvc
+sandbox

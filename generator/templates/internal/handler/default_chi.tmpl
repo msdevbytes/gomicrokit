@@ -1,0 +1,26 @@
+package handler
+
+import (
+	"net/http"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+)
+
+type DefaultHandlerStruct struct{}
+
+func NewDefaultHandler() *DefaultHandlerStruct {
+	return &DefaultHandlerStruct{}
+}
+
+func (h *DefaultHandlerStruct) Register(router chi.Router) {
+	router.Get("/", h.Default)
+}
+
+func (h *DefaultHandlerStruct) Default(w http.ResponseWriter, _ *http.Request) {
+	_ = writeJSON(w, http.StatusOK, APIResponse{
+		Success: true,
+		Message: "Success",
+		Data:    time.Now().Format(time.RFC3339),
+	})
+}

@@ -30,6 +30,19 @@ RUN CGO_ENABLED=0 go build \
 
 COPY ./.env /.env
 
+# Live-reload stage: Compose Watch syncs source; Air rebuilds on Go changes.
+FROM public.ecr.aws/docker/library/golang:${GO_VERSION}-alpine AS dev
+WORKDIR /src
+RUN apk add --no-cache git
+RUN go install github.com/air-verse/air@v1.61.7
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+ARG PORT={{.Port}}
+ENV PORT=${PORT}
+EXPOSE 8000
+CMD ["air", "-c", ".air.docker.toml"]
+
 # Final stage: the running container.
 FROM public.ecr.aws/docker/library/alpine:latest AS final
 
@@ -45,10 +58,10 @@ COPY --from=builder /.env /.env
 # COPY --from=builder . .
 COPY --from=builder /app /app
 
-# Declare the port on which the inventory service will be exposed.
-ENV PORT=4000
-
-EXPOSE ${PORT}
+# Listen port comes from ARG/ENV; EXPOSE is numeric metadata for Docker.
+ARG PORT={{.Port}}
+ENV PORT=${PORT}
+EXPOSE 8000
 
 # Perform any further action as an unprivileged user.
 USER nobody:nobody

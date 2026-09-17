@@ -1,0 +1,33 @@
+package handler
+
+import (
+	"net/http"
+	"runtime"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+)
+
+type MetricsHandler struct{}
+
+func NewMetricsHandler() *MetricsHandler {
+	return &MetricsHandler{}
+}
+
+func (h *MetricsHandler) Register(router chi.Router) {
+	router.Get("/metrics", h.Snapshot)
+}
+
+func (h *MetricsHandler) Snapshot(w http.ResponseWriter, _ *http.Request) {
+	var mem runtime.MemStats
+	runtime.ReadMemStats(&mem)
+	_ = writeJSON(w, http.StatusOK, APIResponse{
+		Success: true,
+		Message: "metrics snapshot",
+		Data: map[string]any{
+			"goroutines": runtime.NumGoroutine(),
+			"heap_alloc": mem.HeapAlloc,
+			"timestamp":  time.Now().UTC().Format(time.RFC3339),
+		},
+	})
+}

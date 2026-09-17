@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package health;
+
+option go_package = "{{.ModulePath}}/api/proto/healthpb;healthpb";
+
+service HealthService {
+  rpc Check(HealthRequest) returns (HealthReply);
+}
+
+message HealthRequest {}
+
+message HealthReply {
+  string status = 1;
+}

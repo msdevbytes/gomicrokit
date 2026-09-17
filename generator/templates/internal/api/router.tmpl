@@ -1,23 +1,53 @@
 package api
 
 import (
-	"os"
 	"time"
+	"os"
 
 	"{{.ModulePath}}/internal/handler"
+{{- if .HasAuth }}
+	"{{.ModulePath}}/internal/middleware"
+{{- end }}
 	"{{.ModulePath}}/internal/service"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/shahbazkrispx/pkgcommon"
 )
 
 func Register(app *fiber.App, svc *service.Container) {
 
 	app.Get("/", func(c *fiber.Ctx) error {
-		return c.JSON(pkgcommon.ResponseBuilder(true, "Welcome to Service", time.Now().Format(time.RFC3339), nil))
+		return c.JSON(handler.APIResponse{
+			Success: true,
+			Message: "Welcome to Service",
+			Data:    time.Now().Format(time.RFC3339),
+		})
+	})
+	app.Get("/healthz", func(c *fiber.Ctx) error {
+		return c.JSON(handler.APIResponse{
+			Success: true,
+			Message: "ok",
+			Data:    map[string]string{"status": "healthy"},
+		})
+	})
+	app.Get("/readyz", func(c *fiber.Ctx) error {
+		return c.JSON(handler.APIResponse{
+			Success: true,
+			Message: "ready",
+			Data:    map[string]string{"status": "ready"},
+		})
 	})
 
 	api := app.Group(os.Getenv("API_ROUTE_VERSION"))
+{{- if .HasAuth }}
+	authHeader := os.Getenv("AUTH_HEADER")
+	if authHeader == "" {
+		authHeader = "x-api-key"
+	}
+	api.Use(middleware.RequireAPIKey(authHeader, os.Getenv("API_KEY")))
+{{- end }}
 
 	handler.NewDefaultHandler().Register(api.Group("/"))
+{{- if .HasMetrics }}
+	handler.NewMetricsHandler().Register(app.Group("/metrics"))
+{{- end }}
 }

@@ -1,0 +1,93 @@
+package discovery
+
+import (
+	"fmt"
+	"os"
+	"strings"
+
+	"{{.ModulePath}}/pkg/logger"
+
+	consulapi "github.com/hashicorp/consul/api"
+)
+
+type Registration struct {
+	ID         string
+	Service    string
+	deregister func() error
+}
+
+func (r *Registration) Deregister() error {
+	if r == nil || r.deregister == nil {
+		return nil
+	}
+	return r.deregister()
+}
+
+type ConsulRegistrar struct {
+	client  *consulapi.Client
+	enabled bool
+}
+
+func NewConsulRegistrar(address string) *ConsulRegistrar {
+	provider := strings.ToLower(strings.TrimSpace(os.Getenv("DISCOVERY_PROVIDER")))
+	if provider == "" || provider == "none" {
+		return &ConsulRegistrar{enabled: false}
+	}
+	if provider != "consul" {
+		logger.Warn("Unsupported DISCOVERY_PROVIDER=%s, disabling service discovery", provider)
+		return &ConsulRegistrar{enabled: false}
+	}
+
+	cfg := consulapi.DefaultConfig()
+	cfg.Address = address
+	client, err := consulapi.NewClient(cfg)
+	if err != nil {
+		logger.Warn("Failed to initialize Consul client: %v", err)
+		return &ConsulRegistrar{enabled: false}
+	}
+	return &ConsulRegistrar{client: client, enabled: true}
+}
+
+func (r *ConsulRegistrar) Enabled() bool {
+	return r != nil && r.enabled && r.client != nil
+}
+
+func (r *ConsulRegistrar) Register(serviceName, serviceID, host string, port int, tags []string) (*Registration, error) {
+	if !r.Enabled() {
+		return nil, nil
+	}
+	if serviceName == "" {
+		return nil, fmt.Errorf("serviceName is required for discovery registration")
+	}
+	if serviceID == "" {
+		serviceID = fmt.Sprintf("%s-%s-%d", serviceName, host, port)
+	}
+
+	reg := &consulapi.AgentServiceRegistration{
+		ID:      serviceID,
+		Name:    serviceName,
+		Address: host,
+		Port:    port,
+		Tags:    tags,
+		Check: &consulapi.AgentServiceCheck{
+			Interval:                       "10s",
+			DeregisterCriticalServiceAfter: "1m",
+			TCP:                            fmt.Sprintf("%s:%d", host, port),
+		},
+	}
+	if err := r.client.Agent().ServiceRegister(reg); err != nil {
+		return nil, fmt.Errorf("consul register failed: %w", err)
+	}
+	logger.Info("Service registered in Consul: %s (%s:%d)", serviceID, host, port)
+	return &Registration{
+		ID:      serviceID,
+		Service: serviceName,
+		deregister: func() error {
+			err := r.client.Agent().ServiceDeregister(serviceID)
+			if err == nil {
+				logger.Info("Service deregistered from Consul: %s", serviceID)
+			}
+			return err
+		},
+	}, nil
+}
